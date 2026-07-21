@@ -1,0 +1,1568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kanban</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #EEF1F0;
+    --paper: #FBFCFB;
+    --ink: #23272B;
+    --ink-soft: #5B6268;
+    --line: #D9DED9;
+    --todo: #5B7C99;
+    --todo-bg: #E7EEF3;
+    --doing: #C98A2E;
+    --doing-bg: #F5EBDA;
+    --done: #6B8F71;
+    --done-bg: #E7EFE7;
+    --shadow: 0 1px 2px rgba(35,39,43,0.06), 0 4px 10px rgba(35,39,43,0.06);
+    --shadow-hover: 0 2px 4px rgba(35,39,43,0.08), 0 10px 24px rgba(35,39,43,0.10);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    background-image:
+      radial-gradient(circle at 1px 1px, rgba(35,39,43,0.06) 1px, transparent 0);
+    background-size: 22px 22px;
+    color: var(--ink);
+    font-family: 'IBM Plex Sans', sans-serif;
+    padding: 40px 32px 64px;
+  }
+
+  header {
+    max-width: 1160px;
+    margin: 0 auto 24px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  h1 {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 34px;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .history-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .history-btn {
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--ink);
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+    box-shadow: var(--shadow);
+    transition: box-shadow 0.15s ease, transform 0.15s ease, color 0.15s ease;
+  }
+
+  .history-btn:hover:not(:disabled) {
+    box-shadow: var(--shadow-hover);
+    transform: translateY(-1px);
+    color: var(--todo);
+  }
+
+  .history-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+
+  .version-badge {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-soft);
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 3px 10px;
+    align-self: center;
+  }
+
+  .save-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-soft);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .save-status-btn {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    text-transform: none;
+    letter-spacing: 0.02em;
+    color: var(--todo);
+    background: var(--todo-bg);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 4px 10px;
+    cursor: pointer;
+    transition: box-shadow .15s ease, transform .15s ease;
+  }
+
+  .save-status-btn:hover {
+    box-shadow: var(--shadow);
+    transform: translateY(-1px);
+  }
+
+  .project-tabs {
+    max-width: 1160px;
+    margin: 0 auto 28px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .project-tab {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--line);
+    background: var(--paper);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.03em;
+    color: var(--ink-soft);
+    cursor: pointer;
+    box-shadow: var(--shadow);
+    transition: box-shadow .15s ease, transform .15s ease, color .15s ease, background .15s ease, border-color .15s ease;
+  }
+
+  .project-tab:hover {
+    box-shadow: var(--shadow-hover);
+    transform: translateY(-1px);
+  }
+
+  .project-tab.active {
+    background: var(--ink);
+    border-color: var(--ink);
+    color: var(--paper);
+  }
+
+  .project-tab-name {
+    outline: none;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .project-tab-name[contenteditable="true"] {
+    white-space: normal;
+    text-overflow: clip;
+    cursor: text;
+  }
+
+  .project-tab-close {
+    background: none;
+    border: none;
+    color: inherit;
+    opacity: 0.5;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 2px;
+    transition: opacity .15s ease;
+  }
+
+  .project-tab-close:hover { opacity: 1; }
+
+  .project-tab-add {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: 1px dashed var(--line);
+    background: transparent;
+    color: var(--ink-soft);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    transition: border-color .15s ease, color .15s ease, transform .15s ease;
+  }
+
+  .project-tab-add:hover {
+    border-color: var(--ink-soft);
+    color: var(--ink);
+    transform: translateY(-1px);
+  }
+
+  .board {
+    max-width: 1160px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+  }
+
+  @media (max-width: 860px) {
+    .board { grid-template-columns: 1fr; }
+  }
+
+  .column {
+    background: transparent;
+    display: flex;
+    flex-direction: column;
+    min-height: 120px;
+  }
+
+  .column-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+    padding: 0 2px;
+  }
+
+  .dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .column[data-col="todo"] .dot { background: var(--todo); }
+  .column[data-col="doing"] .dot { background: var(--doing); }
+  .column[data-col="done"] .dot { background: var(--done); }
+
+  .column-title {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12.5px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--ink);
+  }
+
+  .count {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-soft);
+    margin-left: auto;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 2px 8px;
+  }
+
+  .dropzone {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 6px;
+    border-radius: 14px;
+    min-height: 80px;
+    transition: background 0.15s ease;
+  }
+
+  .dropzone.drag-over {
+    background: rgba(35,39,43,0.05);
+  }
+
+  .card {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 14px 12px;
+    box-shadow: var(--shadow);
+    cursor: grab;
+    position: relative;
+    z-index: 1;
+    transition: box-shadow 0.15s ease, transform 0.15s ease;
+  }
+
+  .card:hover {
+    box-shadow: var(--shadow-hover);
+    transform: translateY(-1px);
+    z-index: 5;
+  }
+
+  .card.dragging {
+    opacity: 0.4;
+  }
+
+  .card.editing {
+    box-shadow: var(--shadow-hover);
+    z-index: 5;
+  }
+
+  .card.menu-open {
+    z-index: 6;
+  }
+
+  .card.editing .card-text {
+    cursor: text;
+    box-shadow: 0 0 0 2px rgba(91,124,153,0.35);
+    border-radius: 4px;
+  }
+
+  .card .pin {
+    position: absolute;
+    top: -5px;
+    left: 14px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    box-shadow: 0 2px 3px rgba(35,39,43,0.25);
+  }
+
+  .column[data-col="todo"] .card .pin { background: var(--todo); }
+  .column[data-col="doing"] .card .pin { background: var(--doing); }
+  .column[data-col="done"] .card .pin { background: var(--done); }
+
+  .card-text {
+    font-size: 14.5px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-word;
+    outline: none;
+  }
+
+  .card.done-state .card-text,
+  .card.done-state .card-line-text {
+    color: var(--ink-soft);
+    text-decoration: line-through;
+    text-decoration-color: var(--line);
+  }
+
+  .card.done-state .card-bullet-list li,
+  .card.done-state .checklist-row span {
+    color: var(--ink-soft);
+    text-decoration: line-through;
+    text-decoration-color: var(--line);
+  }
+
+  .card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 10px;
+  }
+
+  .card-date {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    color: var(--ink-soft);
+  }
+
+  .card-menu {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+  }
+
+  .card-menu-btn {
+    background: none;
+    border: none;
+    color: var(--ink-soft);
+    font-size: 15px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    line-height: 1;
+    opacity: 0;
+    transition: opacity .15s ease, color .15s ease, background .15s ease;
+  }
+
+  .card:hover .card-menu-btn { opacity: 1; }
+  .card.editing .card-menu-btn { opacity: 1; }
+  .card-menu.open .card-menu-btn {
+    opacity: 1;
+    color: var(--ink);
+    background: rgba(35,39,43,0.06);
+  }
+
+  .card-menu-dropdown {
+    display: none;
+    position: absolute;
+    top: 28px;
+    right: 0;
+    min-width: 168px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: var(--shadow-hover);
+    padding: 6px;
+    z-index: 20;
+  }
+
+  .card-menu.open .card-menu-dropdown { display: block; }
+
+  .card-menu-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 13px;
+    color: var(--ink);
+    padding: 7px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+
+  .card-menu-item:hover { background: rgba(35,39,43,0.06); }
+
+  .card-menu-delete { color: #B23B3B; }
+  .card-menu-delete:hover { background: rgba(178,59,59,0.08); }
+
+  .card-menu-section-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--ink-soft);
+    padding: 6px 8px 2px;
+  }
+
+  .card-menu-divider {
+    height: 1px;
+    background: var(--line);
+    margin: 4px 2px;
+  }
+
+  .card-menu-deadline-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 8px;
+  }
+
+  .card-menu-label {
+    font-size: 13px;
+    color: var(--ink);
+  }
+
+  .card-menu-date-input {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 3px 5px;
+    color: var(--ink);
+    background: var(--bg);
+  }
+
+  .card-dates {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .card-deadline {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    color: var(--doing);
+    background: var(--doing-bg);
+    border-radius: 20px;
+    padding: 2px 8px;
+  }
+
+  .card-deadline.overdue {
+    color: #B23B3B;
+    background: #F5E1E1;
+  }
+
+  .card-list-view {
+    font-size: 14.5px;
+    line-height: 1.5;
+  }
+
+  .card-bullet-list {
+    margin: 0;
+    padding-left: 18px;
+  }
+
+  .card-bullet-list li {
+    margin-bottom: 4px;
+    word-break: break-word;
+  }
+
+  .checklist-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 6px;
+    cursor: pointer;
+  }
+
+  .checklist-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .checklist-row input[type="checkbox"] {
+    margin-top: 3px;
+    accent-color: var(--todo);
+    cursor: pointer;
+  }
+
+  .checklist-row span {
+    word-break: break-word;
+  }
+
+  .checklist-row.checked span {
+    color: var(--ink-soft);
+    text-decoration: line-through;
+    text-decoration-color: var(--line);
+  }
+
+  .card-menu-format.active {
+    font-weight: 600;
+    background: rgba(91,124,153,0.10);
+    color: var(--todo);
+  }
+
+  .add-row {
+    margin-top: 12px;
+  }
+
+  .add-input {
+    width: 100%;
+    border: 1px dashed var(--line);
+    background: transparent;
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 13.5px;
+    color: var(--ink);
+    resize: none;
+    outline: none;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+
+  .add-input::placeholder { color: var(--ink-soft); }
+
+  .add-input:focus {
+    border-color: var(--ink-soft);
+    border-style: solid;
+    background: var(--paper);
+  }
+
+  footer {
+    max-width: 1160px;
+    margin: 40px auto 0;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-soft);
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <div class="history-controls">
+      <button class="history-btn" id="undo-btn" title="Undo (Ctrl+Z)" disabled>&#8630;</button>
+      <button class="history-btn" id="redo-btn" title="Redo (Ctrl+Y)" disabled>&#8631;</button>
+    </div>
+    <h1>Kanban</h1>
+    <span class="version-badge" id="version-badge"></span>
+  </div>
+  <div class="save-status" id="save-status">
+    <span class="save-status-text" id="save-status-text">checking file access&hellip;</span>
+    <button class="save-status-btn" id="save-status-btn" style="display:none;"></button>
+  </div>
+</header>
+
+<div class="project-tabs" id="project-tabs"></div>
+
+<div class="board" id="board">
+  <div class="column" data-col="todo">
+    <div class="column-head">
+      <span class="dot"></span>
+      <span class="column-title">To do</span>
+      <span class="count" data-count="todo">0</span>
+    </div>
+    <div class="dropzone" data-col="todo" id="dropzone-todo"></div>
+    <div class="add-row">
+      <textarea class="add-input" data-col="todo" rows="1" placeholder="+ add a task, press Enter"></textarea>
+    </div>
+  </div>
+
+  <div class="column" data-col="doing">
+    <div class="column-head">
+      <span class="dot"></span>
+      <span class="column-title">In progress</span>
+      <span class="count" data-count="doing">0</span>
+    </div>
+    <div class="dropzone" data-col="doing" id="dropzone-doing"></div>
+    <div class="add-row">
+      <textarea class="add-input" data-col="doing" rows="1" placeholder="+ add a task, press Enter"></textarea>
+    </div>
+  </div>
+
+  <div class="column" data-col="done">
+    <div class="column-head">
+      <span class="dot"></span>
+      <span class="column-title">Done</span>
+      <span class="count" data-count="done">0</span>
+    </div>
+    <div class="dropzone" data-col="done" id="dropzone-done"></div>
+    <div class="add-row">
+      <textarea class="add-input" data-col="done" rows="1" placeholder="+ add a task, press Enter"></textarea>
+    </div>
+  </div>
+</div>
+
+<footer>click a tab to switch projects, + to add one, double-click a tab to rename it &middot; drag cards between columns &middot; hover a task and use the &#8942; menu to edit, set a deadline, move it, or delete it &middot; while editing, start a line with &quot;* &quot; for a bullet or &quot;[] &quot; for a checkbox &middot; connect a save file above for automatic backups to disk &middot; built for Chrome and Edge</footer>
+
+<script>
+(function () {
+  const STORAGE_KEY = 'kanban-personal-board-v1';
+  const COLS = ['todo', 'doing', 'done'];
+  const APP_VERSION = '3.0.0';
+  const HANDLE_DB_NAME = 'kanban-file-handle-db';
+  const HANDLE_STORE_NAME = 'handles';
+  const HANDLE_KEY = 'kanban-data-file';
+
+  let fileHandle = null;
+  let fileWriteTimeout = null;
+
+  function uid() {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  }
+
+  function makeProject(name) {
+    return { id: uid(), name: name, todo: [], doing: [], done: [] };
+  }
+
+  function migrateItem(item) {
+    if (typeof item.text !== 'string') item.text = '';
+    if (item.listType === 'checklist' && Array.isArray(item.checked)) {
+      const lines = item.text.split('\n');
+      let ci = 0;
+      const newLines = lines.map(line => {
+        if (line.trim() === '') return line;
+        const prefix = item.checked[ci] ? '[x] ' : '[] ';
+        ci++;
+        return prefix + line;
+      });
+      item.text = newLines.join('\n');
+    } else if (item.listType === 'bullet') {
+      const lines = item.text.split('\n');
+      item.text = lines.map(line => line.trim() === '' ? line : '* ' + line).join('\n');
+    }
+    delete item.listType;
+    delete item.checked;
+  }
+
+  function normalizeLoadedState(parsed) {
+    if (!parsed.activeProjectId || !parsed.projects.some(p => p.id === parsed.activeProjectId)) {
+      parsed.activeProjectId = parsed.projects[0].id;
+    }
+    parsed.projects.forEach(p => {
+      COLS.forEach(col => {
+        (p[col] || []).forEach(migrateItem);
+      });
+    });
+    return parsed;
+  }
+
+  function load() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && Array.isArray(parsed.projects) && parsed.projects.length) {
+          return normalizeLoadedState(parsed);
+        }
+        // migrate the old single-board format { todo, doing, done }
+        if (parsed && Array.isArray(parsed.todo)) {
+          const proj = makeProject('My Tasks');
+          proj.todo = parsed.todo || [];
+          proj.doing = parsed.doing || [];
+          proj.done = parsed.done || [];
+          COLS.forEach(col => proj[col].forEach(migrateItem));
+          return { projects: [proj], activeProjectId: proj.id };
+        }
+      }
+    } catch (e) { console.error('Could not read saved board', e); }
+    const proj = makeProject('My Tasks');
+    return { projects: [proj], activeProjectId: proj.id };
+  }
+
+  function save(state) {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (e) { console.error('Could not save board', e); }
+    scheduleFileWrite();
+  }
+
+  // --- File System Access API: optional auto-save to a real file on disk ---
+
+  function openHandleDB() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(HANDLE_DB_NAME, 1);
+      req.onupgradeneeded = () => {
+        req.result.createObjectStore(HANDLE_STORE_NAME);
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  function idbSet(key, value) {
+    return openHandleDB().then(db => new Promise((resolve, reject) => {
+      const tx = db.transaction(HANDLE_STORE_NAME, 'readwrite');
+      tx.objectStore(HANDLE_STORE_NAME).put(value, key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    }));
+  }
+
+  function idbGet(key) {
+    return openHandleDB().then(db => new Promise((resolve, reject) => {
+      const tx = db.transaction(HANDLE_STORE_NAME, 'readonly');
+      const req = tx.objectStore(HANDLE_STORE_NAME).get(key);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    }));
+  }
+
+  function scheduleFileWrite() {
+    if (!fileHandle) return;
+    clearTimeout(fileWriteTimeout);
+    fileWriteTimeout = setTimeout(writeStateToFile, 400);
+  }
+
+  async function writeStateToFile() {
+    if (!fileHandle) return;
+    try {
+      const perm = await fileHandle.queryPermission({ mode: 'readwrite' });
+      if (perm !== 'granted') {
+        setSaveStatus('permission-needed');
+        return;
+      }
+      const writable = await fileHandle.createWritable();
+      await writable.write(JSON.stringify(state, null, 2));
+      await writable.close();
+      setSaveStatus('connected');
+    } catch (err) {
+      console.error('Could not write to save file', err);
+      setSaveStatus('error');
+    }
+  }
+
+  async function loadStateFromFile() {
+    if (!fileHandle) return false;
+    try {
+      const file = await fileHandle.getFile();
+      const text = await file.text();
+      if (!text.trim()) return false;
+      const parsed = JSON.parse(text);
+      if (parsed && Array.isArray(parsed.projects) && parsed.projects.length) {
+        state = normalizeLoadedState(parsed);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        render();
+        return true;
+      }
+    } catch (err) {
+      console.error('Could not read save file', err);
+    }
+    return false;
+  }
+
+  async function tryRestoreFileHandle() {
+    try {
+      const handle = await idbGet(HANDLE_KEY);
+      if (!handle) { setSaveStatus('disconnected'); return; }
+      fileHandle = handle;
+      const perm = await handle.queryPermission({ mode: 'readwrite' });
+      if (perm === 'granted') {
+        await loadStateFromFile();
+        setSaveStatus('connected');
+      } else {
+        setSaveStatus('permission-needed');
+      }
+    } catch (err) {
+      console.error('Could not restore save file connection', err);
+      setSaveStatus('disconnected');
+    }
+  }
+
+  async function grantFilePermission() {
+    if (!fileHandle) return;
+    try {
+      const perm = await fileHandle.requestPermission({ mode: 'readwrite' });
+      if (perm === 'granted') {
+        await loadStateFromFile();
+        setSaveStatus('connected');
+      } else {
+        setSaveStatus('permission-needed');
+      }
+    } catch (err) {
+      console.error('Permission request failed', err);
+      setSaveStatus('permission-needed');
+    }
+  }
+
+  async function connectSaveFile() {
+    if (!window.showSaveFilePicker) {
+      alert('Automatic file saving isn\'t available in this browser. Please switch to Chrome or Edge to connect a save file \u2014 your board will keep working here using in-browser storage.');
+      return;
+    }
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: 'kanban-data.json',
+        types: [{ description: 'Kanban data', accept: { 'application/json': ['.json'] } }]
+      });
+      fileHandle = handle;
+      await idbSet(HANDLE_KEY, handle);
+
+      const loadedFromFile = await loadStateFromFile();
+      if (!loadedFromFile) {
+        await writeStateToFile();
+      }
+      setSaveStatus('connected');
+      render();
+    } catch (err) {
+      if (err.name !== 'AbortError') console.error('Could not connect save file', err);
+    }
+  }
+
+  function setSaveStatus(status) {
+    const textEl = document.getElementById('save-status-text');
+    const btnEl = document.getElementById('save-status-btn');
+    if (!textEl || !btnEl) return;
+    btnEl.style.display = 'none';
+    btnEl.onclick = null;
+
+    if (status === 'unsupported') {
+      textEl.textContent = 'browser-only storage \u2013 use Chrome or Edge for file backups';
+    } else if (status === 'disconnected') {
+      textEl.textContent = 'not backed up to a file';
+      btnEl.textContent = 'Connect save file';
+      btnEl.style.display = '';
+      btnEl.onclick = connectSaveFile;
+    } else if (status === 'connected') {
+      textEl.textContent = 'saved to ' + (fileHandle && fileHandle.name ? fileHandle.name : 'file');
+      btnEl.textContent = 'Change file';
+      btnEl.style.display = '';
+      btnEl.onclick = connectSaveFile;
+    } else if (status === 'permission-needed') {
+      textEl.textContent = 'file access needs to be reconnected';
+      btnEl.textContent = 'Reconnect';
+      btnEl.style.display = '';
+      btnEl.onclick = grantFilePermission;
+    } else if (status === 'error') {
+      textEl.textContent = 'could not save to file';
+      btnEl.textContent = 'Retry';
+      btnEl.style.display = '';
+      btnEl.onclick = connectSaveFile;
+    }
+  }
+
+  // --- end File System Access API section ---
+
+  let state = load();
+  save(state);
+
+  function activeProject() {
+    return state.projects.find(p => p.id === state.activeProjectId) || state.projects[0];
+  }
+
+  const HISTORY_LIMIT = 50;
+  let undoStack = [];
+  let redoStack = [];
+
+  function pushHistory() {
+    undoStack.push(JSON.stringify(state));
+    if (undoStack.length > HISTORY_LIMIT) undoStack.shift();
+    redoStack = [];
+    updateHistoryButtons();
+  }
+
+  function updateHistoryButtons() {
+    const undoBtn = document.getElementById('undo-btn');
+    const redoBtn = document.getElementById('redo-btn');
+    undoBtn.disabled = undoStack.length === 0;
+    redoBtn.disabled = redoStack.length === 0;
+  }
+
+  function undo() {
+    if (!undoStack.length) return;
+    redoStack.push(JSON.stringify(state));
+    state = JSON.parse(undoStack.pop());
+    save(state);
+    render();
+  }
+
+  function redo() {
+    if (!redoStack.length) return;
+    undoStack.push(JSON.stringify(state));
+    state = JSON.parse(redoStack.pop());
+    save(state);
+    render();
+  }
+
+  function formatDate(ts) {
+    const d = new Date(ts);
+    const opts = { month: 'short', day: 'numeric' };
+    return d.toLocaleDateString(undefined, opts);
+  }
+
+  function formatDeadline(dateStr) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    return dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
+
+  function isOverdue(dateStr, col) {
+    if (col === 'done') return false;
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const deadlineDate = new Date(y, m - 1, d);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return deadlineDate < today;
+  }
+
+  function closeAllCardMenus() {
+    document.querySelectorAll('.card-menu.open').forEach(m => m.classList.remove('open'));
+    document.querySelectorAll('.card.menu-open').forEach(c => c.classList.remove('menu-open'));
+  }
+
+  function render() {
+    renderTabs();
+    renderBoard();
+    updateHistoryButtons();
+  }
+
+  function renderTabs() {
+    const tabsEl = document.getElementById('project-tabs');
+    tabsEl.innerHTML = '';
+
+    state.projects.forEach(p => {
+      const tab = document.createElement('div');
+      tab.className = 'project-tab' + (p.id === state.activeProjectId ? ' active' : '');
+      tab.dataset.id = p.id;
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'project-tab-name';
+      nameSpan.textContent = p.name;
+      nameSpan.contentEditable = 'false';
+      tab.appendChild(nameSpan);
+
+      if (state.projects.length > 1) {
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'project-tab-close';
+        closeBtn.textContent = '\u00D7';
+        closeBtn.title = 'Delete project';
+        closeBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          deleteProject(p.id);
+        });
+        tab.appendChild(closeBtn);
+      }
+
+      tab.addEventListener('click', (e) => {
+        if (e.target.isContentEditable) return;
+        if (state.activeProjectId !== p.id) {
+          state.activeProjectId = p.id;
+          save(state);
+          render();
+        }
+      });
+
+      nameSpan.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        startRenameProject(p, nameSpan);
+      });
+
+      tabsEl.appendChild(tab);
+    });
+
+    const addBtn = document.createElement('button');
+    addBtn.className = 'project-tab-add';
+    addBtn.textContent = '+';
+    addBtn.title = 'New project';
+    addBtn.addEventListener('click', addProject);
+    tabsEl.appendChild(addBtn);
+  }
+
+  function startRenameProject(project, nameSpan) {
+    const original = project.name;
+    nameSpan.contentEditable = 'true';
+    nameSpan.spellcheck = false;
+    nameSpan.focus();
+    document.execCommand('selectAll', false, null);
+
+    function finish(shouldSave) {
+      nameSpan.removeEventListener('blur', onBlur);
+      nameSpan.removeEventListener('keydown', onKeydown);
+      if (shouldSave) {
+        const newName = nameSpan.textContent.trim() || original;
+        if (newName !== project.name) {
+          pushHistory();
+          project.name = newName;
+          save(state);
+        }
+      }
+      render();
+    }
+
+    function onBlur() { finish(true); }
+    function onKeydown(e) {
+      if (e.key === 'Enter') { e.preventDefault(); nameSpan.blur(); }
+      if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+    }
+
+    nameSpan.addEventListener('blur', onBlur);
+    nameSpan.addEventListener('keydown', onKeydown);
+  }
+
+  function addProject() {
+    pushHistory();
+    const p = makeProject('New Project');
+    state.projects.push(p);
+    state.activeProjectId = p.id;
+    save(state);
+    render();
+    requestAnimationFrame(() => {
+      const nameSpan = document.querySelector('.project-tab[data-id="' + p.id + '"] .project-tab-name');
+      if (nameSpan) startRenameProject(p, nameSpan);
+    });
+  }
+
+  function deleteProject(id) {
+    if (state.projects.length <= 1) return;
+    const proj = state.projects.find(p => p.id === id);
+    if (!proj) return;
+    const confirmed = confirm('Delete project "' + proj.name + '" and all its tasks? You can undo this with Ctrl+Z.');
+    if (!confirmed) return;
+    pushHistory();
+    const idx = state.projects.findIndex(p => p.id === id);
+    state.projects.splice(idx, 1);
+    if (state.activeProjectId === id) {
+      const newIdx = Math.min(idx, state.projects.length - 1);
+      state.activeProjectId = state.projects[newIdx].id;
+    }
+    save(state);
+    render();
+  }
+
+  function renderBoard() {
+    const proj = activeProject();
+    COLS.forEach(col => {
+      const zone = document.getElementById('dropzone-' + col);
+      zone.innerHTML = '';
+      const items = proj[col] || [];
+      document.querySelector('[data-count="' + col + '"]').textContent = items.length;
+
+      items.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'card' + (col === 'done' ? ' done-state' : '');
+        card.draggable = true;
+        card.dataset.id = item.id;
+
+        const pin = document.createElement('div');
+        pin.className = 'pin';
+        card.appendChild(pin);
+
+        const text = document.createElement('div');
+        text.className = 'card-text';
+        text.contentEditable = 'false';
+        text.spellcheck = false;
+        text.textContent = item.text;
+        card.appendChild(text);
+
+        const listView = document.createElement('div');
+        listView.className = 'card-list-view';
+        card.appendChild(listView);
+
+        let editingNow = false;
+        let editStartText = item.text;
+
+        function parseLine(line) {
+          const bulletMatch = line.match(/^(\s*)[*-]\s+(.*)$/);
+          if (bulletMatch) return { type: 'bullet', content: bulletMatch[2] };
+          const checkMatch = line.match(/^(\s*)\[( |x|X)?\]\s+(.*)$/);
+          if (checkMatch) return { type: 'checkbox', checked: (checkMatch[2] || '').toLowerCase() === 'x', content: checkMatch[3] };
+          return { type: 'text', content: line };
+        }
+
+        function toggleCheckboxLine(lineIdx, checked) {
+          const lines = item.text.split('\n');
+          const line = lines[lineIdx];
+          const match = line.match(/^(\s*)\[( |x|X)?\](\s+.*)$/);
+          if (match) {
+            lines[lineIdx] = match[1] + '[' + (checked ? 'x' : ' ') + ']' + match[3];
+            item.text = lines.join('\n');
+          }
+        }
+
+        function renderView() {
+          listView.innerHTML = '';
+          const lines = item.text.split('\n');
+          let currentList = null;
+          lines.forEach((rawLine, idx) => {
+            if (rawLine.trim() === '') {
+              currentList = null;
+              const spacer = document.createElement('div');
+              spacer.className = 'card-line-text';
+              spacer.innerHTML = '&nbsp;';
+              listView.appendChild(spacer);
+              return;
+            }
+            const parsed = parseLine(rawLine);
+            if (parsed.type === 'bullet') {
+              if (!currentList) {
+                currentList = document.createElement('ul');
+                currentList.className = 'card-bullet-list';
+                listView.appendChild(currentList);
+              }
+              const li = document.createElement('li');
+              li.textContent = parsed.content;
+              currentList.appendChild(li);
+            } else if (parsed.type === 'checkbox') {
+              currentList = null;
+              const row = document.createElement('label');
+              row.className = 'checklist-row' + (parsed.checked ? ' checked' : '');
+              row.addEventListener('mousedown', (e) => e.stopPropagation());
+              row.addEventListener('click', (e) => e.stopPropagation());
+              const cb = document.createElement('input');
+              cb.type = 'checkbox';
+              cb.checked = parsed.checked;
+              cb.addEventListener('change', () => {
+                pushHistory();
+                toggleCheckboxLine(idx, cb.checked);
+                save(state);
+                row.classList.toggle('checked', cb.checked);
+              });
+              const span = document.createElement('span');
+              span.textContent = parsed.content;
+              row.appendChild(cb);
+              row.appendChild(span);
+              listView.appendChild(row);
+            } else {
+              currentList = null;
+              const p = document.createElement('div');
+              p.className = 'card-line-text';
+              p.textContent = parsed.content;
+              listView.appendChild(p);
+            }
+          });
+        }
+
+        function updateBodyVisibility() {
+          text.style.display = editingNow ? '' : 'none';
+          listView.style.display = editingNow ? 'none' : '';
+          if (!editingNow) renderView();
+        }
+        updateBodyVisibility();
+
+        function enterEdit() {
+          editStartText = item.text;
+          editingNow = true;
+          text.contentEditable = 'true';
+          card.draggable = false;
+          card.classList.add('editing');
+          updateBodyVisibility();
+          text.focus();
+          const range = document.createRange();
+          range.selectNodeContents(text);
+          range.collapse(false);
+          const sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }
+
+        function exitEdit() {
+          text.contentEditable = 'false';
+          card.draggable = true;
+          card.classList.remove('editing');
+          editingNow = false;
+          const newText = text.textContent.trim();
+          if (!newText) {
+            removeItem(item.id);
+            render();
+            return;
+          }
+          if (newText !== item.text) {
+            pushHistory();
+            item.text = newText;
+            save(state);
+          }
+          updateBodyVisibility();
+        }
+
+        text.addEventListener('blur', exitEdit);
+        text.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' && e.shiftKey) {
+            e.preventDefault();
+            const inserted = document.execCommand && document.execCommand('insertText', false, '\n');
+            if (!inserted) {
+              const sel = window.getSelection();
+              if (sel && sel.rangeCount) {
+                const range = sel.getRangeAt(0);
+                range.deleteContents();
+                const newlineNode = document.createTextNode('\n');
+                range.insertNode(newlineNode);
+                range.setStartAfter(newlineNode);
+                range.setEndAfter(newlineNode);
+                sel.removeAllRanges();
+                sel.addRange(range);
+              }
+            }
+            return;
+          }
+          if (e.key === 'Enter') { e.preventDefault(); text.blur(); }
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            text.textContent = editStartText;
+            text.blur();
+          }
+        });
+
+        const menuWrap = document.createElement('div');
+        menuWrap.className = 'card-menu';
+
+        const menuBtn = document.createElement('button');
+        menuBtn.className = 'card-menu-btn';
+        menuBtn.textContent = '\u22EE';
+        menuBtn.title = 'Task options';
+        menuWrap.appendChild(menuBtn);
+
+        const dropdown = document.createElement('div');
+        dropdown.className = 'card-menu-dropdown';
+
+        const editItem = document.createElement('button');
+        editItem.className = 'card-menu-item';
+        editItem.textContent = 'Edit task';
+        editItem.addEventListener('click', (e) => {
+          e.stopPropagation();
+          menuWrap.classList.remove('open');
+          card.classList.remove('menu-open');
+          enterEdit();
+        });
+        dropdown.appendChild(editItem);
+
+        const deadlineDivider = document.createElement('div');
+        deadlineDivider.className = 'card-menu-divider';
+        dropdown.appendChild(deadlineDivider);
+
+        const deadlineRow = document.createElement('div');
+        deadlineRow.className = 'card-menu-deadline-row';
+        const deadlineLabel = document.createElement('span');
+        deadlineLabel.className = 'card-menu-label';
+        deadlineLabel.textContent = 'Deadline';
+        deadlineRow.appendChild(deadlineLabel);
+        const deadlineInput = document.createElement('input');
+        deadlineInput.type = 'date';
+        deadlineInput.className = 'card-menu-date-input';
+        if (item.deadline) deadlineInput.value = item.deadline;
+        deadlineInput.addEventListener('click', (e) => e.stopPropagation());
+        deadlineInput.addEventListener('mousedown', (e) => e.stopPropagation());
+        deadlineRow.appendChild(deadlineInput);
+        dropdown.appendChild(deadlineRow);
+
+        const clearDeadlineBtn = document.createElement('button');
+        clearDeadlineBtn.className = 'card-menu-item';
+        clearDeadlineBtn.textContent = 'Clear deadline';
+        clearDeadlineBtn.style.display = item.deadline ? '' : 'none';
+        clearDeadlineBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          pushHistory();
+          item.deadline = null;
+          deadlineInput.value = '';
+          refreshDeadlineUI();
+          save(state);
+        });
+        dropdown.appendChild(clearDeadlineBtn);
+
+        if (state.projects.length > 1) {
+          const divider1 = document.createElement('div');
+          divider1.className = 'card-menu-divider';
+          dropdown.appendChild(divider1);
+
+          const moveLabel = document.createElement('div');
+          moveLabel.className = 'card-menu-section-label';
+          moveLabel.textContent = 'Move to';
+          dropdown.appendChild(moveLabel);
+
+          state.projects.forEach(p => {
+            if (p.id === state.activeProjectId) return;
+            const moveBtn = document.createElement('button');
+            moveBtn.className = 'card-menu-item';
+            moveBtn.textContent = p.name;
+            moveBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              moveItemToProject(item.id, p.id);
+              render();
+            });
+            dropdown.appendChild(moveBtn);
+          });
+        }
+
+        const divider2 = document.createElement('div');
+        divider2.className = 'card-menu-divider';
+        dropdown.appendChild(divider2);
+
+        const deleteItem = document.createElement('button');
+        deleteItem.className = 'card-menu-item card-menu-delete';
+        deleteItem.textContent = 'Delete task';
+        deleteItem.addEventListener('click', (e) => {
+          e.stopPropagation();
+          removeItem(item.id);
+          render();
+        });
+        dropdown.appendChild(deleteItem);
+
+        menuWrap.appendChild(dropdown);
+
+        menuBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const isOpen = menuWrap.classList.contains('open');
+          closeAllCardMenus();
+          if (!isOpen) {
+            menuWrap.classList.add('open');
+            card.classList.add('menu-open');
+          }
+        });
+        menuBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+
+        card.appendChild(menuWrap);
+
+        const footerRow = document.createElement('div');
+        footerRow.className = 'card-footer';
+
+        const dateWrap = document.createElement('div');
+        dateWrap.className = 'card-dates';
+
+        const date = document.createElement('span');
+        date.className = 'card-date';
+        date.textContent = formatDate(item.created);
+        dateWrap.appendChild(date);
+
+        const deadlineBadge = document.createElement('span');
+        deadlineBadge.className = 'card-deadline';
+        deadlineBadge.style.display = 'none';
+        dateWrap.appendChild(deadlineBadge);
+
+        function refreshDeadlineUI() {
+          if (item.deadline) {
+            deadlineBadge.style.display = '';
+            deadlineBadge.className = 'card-deadline' + (isOverdue(item.deadline, col) ? ' overdue' : '');
+            deadlineBadge.textContent = 'due ' + formatDeadline(item.deadline);
+            clearDeadlineBtn.style.display = '';
+          } else {
+            deadlineBadge.style.display = 'none';
+            clearDeadlineBtn.style.display = 'none';
+          }
+        }
+        refreshDeadlineUI();
+
+        let deadlineHistoryPushed = false;
+        deadlineInput.addEventListener('focus', () => {
+          deadlineHistoryPushed = false;
+        });
+        deadlineInput.addEventListener('change', (e) => {
+          if (!deadlineHistoryPushed) {
+            pushHistory();
+            deadlineHistoryPushed = true;
+          }
+          item.deadline = e.target.value || null;
+          refreshDeadlineUI();
+          save(state);
+        });
+
+        footerRow.appendChild(dateWrap);
+        card.appendChild(footerRow);
+
+        card.addEventListener('dragstart', (e) => {
+          card.classList.add('dragging');
+          e.dataTransfer.setData('text/plain', item.id);
+          e.dataTransfer.effectAllowed = 'move';
+        });
+        card.addEventListener('dragend', () => {
+          card.classList.remove('dragging');
+        });
+
+        zone.appendChild(card);
+      });
+    });
+  }
+
+  function findItem(id) {
+    for (const proj of state.projects) {
+      for (const col of COLS) {
+        const idx = proj[col].findIndex(i => i.id === id);
+        if (idx !== -1) return { proj, col, idx };
+      }
+    }
+    return null;
+  }
+
+  function removeItem(id) {
+    const loc = findItem(id);
+    if (loc) {
+      pushHistory();
+      loc.proj[loc.col].splice(loc.idx, 1);
+      save(state);
+    }
+  }
+
+  function moveItem(id, targetCol, targetIndex) {
+    const loc = findItem(id);
+    if (!loc) return;
+    pushHistory();
+    const [item] = loc.proj[loc.col].splice(loc.idx, 1);
+    const targetProj = loc.proj;
+    if (targetIndex === undefined || targetIndex > targetProj[targetCol].length) {
+      targetProj[targetCol].push(item);
+    } else {
+      targetProj[targetCol].splice(targetIndex, 0, item);
+    }
+    save(state);
+  }
+
+  function moveItemToProject(id, targetProjectId) {
+    const loc = findItem(id);
+    if (!loc) return;
+    const targetProj = state.projects.find(p => p.id === targetProjectId);
+    if (!targetProj) return;
+    pushHistory();
+    const [item] = loc.proj[loc.col].splice(loc.idx, 1);
+    targetProj[loc.col].push(item);
+    save(state);
+  }
+
+  COLS.forEach(col => {
+    const zone = document.getElementById('dropzone-' + col);
+
+    zone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      zone.classList.add('drag-over');
+      e.dataTransfer.dropEffect = 'move';
+    });
+
+    zone.addEventListener('dragleave', () => {
+      zone.classList.remove('drag-over');
+    });
+
+    zone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      zone.classList.remove('drag-over');
+      const id = e.dataTransfer.getData('text/plain');
+
+      let targetIndex;
+      const after = [...zone.querySelectorAll('.card:not(.dragging)')].find(card => {
+        const rect = card.getBoundingClientRect();
+        return e.clientY < rect.top + rect.height / 2;
+      });
+      if (after) {
+        targetIndex = [...zone.children].indexOf(after);
+      }
+
+      moveItem(id, col, targetIndex);
+      render();
+    });
+  });
+
+  document.querySelectorAll('.add-input').forEach(input => {
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        const text = input.value.trim();
+        if (!text) return;
+        const col = input.dataset.col;
+        pushHistory();
+        activeProject()[col].push({ id: uid(), text: text, created: Date.now(), deadline: null });
+        save(state);
+        input.value = '';
+        input.style.height = 'auto';
+        render();
+      }
+    });
+
+    input.addEventListener('input', () => {
+      input.style.height = 'auto';
+      input.style.height = input.scrollHeight + 'px';
+    });
+  });
+
+  document.getElementById('undo-btn').addEventListener('click', undo);
+  document.getElementById('redo-btn').addEventListener('click', redo);
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.card-menu')) {
+      closeAllCardMenus();
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeAllCardMenus();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    const modifier = e.metaKey || e.ctrlKey;
+    if (!modifier) return;
+    const activeEl = document.activeElement;
+    const isEditingField = activeEl && (activeEl.isContentEditable || activeEl.tagName === 'TEXTAREA');
+    if (isEditingField) return;
+
+    const key = e.key.toLowerCase();
+    if (key === 'z' && e.shiftKey) {
+      e.preventDefault();
+      redo();
+    } else if (key === 'z') {
+      e.preventDefault();
+      undo();
+    } else if (key === 'y') {
+      e.preventDefault();
+      redo();
+    }
+  });
+
+  document.getElementById('version-badge').textContent = 'v' + APP_VERSION;
+
+  render();
+
+  if (window.showSaveFilePicker) {
+    setSaveStatus('disconnected');
+    tryRestoreFileHandle();
+  } else {
+    setSaveStatus('unsupported');
+  }
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,6 @@
+# Personal task data - not project content, never goes in the repo
+kanban-data.json
+Archive/kanban-data - Copy.json
+
+# Local Claude Code settings (machine-specific, not shared project config)
+.claude/
