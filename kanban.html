@@ -214,6 +214,40 @@
 
   .save-menu-dropdown.open { display: block; }
 
+  .save-warning-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+  }
+
+  .save-warning-modal {
+    background: var(--paper);
+    border: 1px solid var(--danger);
+    border-radius: 14px;
+    box-shadow: var(--shadow-hover);
+    max-width: 420px;
+    padding: 24px;
+    text-align: center;
+  }
+
+  .save-warning-modal h2 {
+    font-family: 'Fraunces', serif;
+    color: var(--danger);
+    margin: 0 0 8px;
+  }
+
+  .save-warning-modal p {
+    color: var(--ink-soft);
+    margin: 0 0 18px;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
   .save-menu-item {
     display: block;
     width: 100%;
@@ -397,6 +431,19 @@
     background: var(--overlay);
   }
 
+  .project-tab.drag-over {
+    background: var(--todo-bg);
+    border-color: var(--todo);
+    color: var(--todo);
+    box-shadow: 0 0 0 2px var(--todo), var(--shadow-hover);
+    transform: translateY(-1px) scale(1.04);
+  }
+
+  .project-tab.drag-over::before {
+    content: '\2192';
+    font-weight: 700;
+  }
+
   .card {
     background: var(--paper);
     border: 1px solid var(--line);
@@ -407,6 +454,19 @@
     position: relative;
     z-index: 1;
     transition: box-shadow 0.15s ease, transform 0.15s ease;
+    touch-action: pan-y;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .card-ghost {
+    position: fixed;
+    pointer-events: none;
+    z-index: 1000;
+    margin: 0;
+    opacity: 0.95;
+    box-shadow: var(--shadow-hover);
   }
 
   .card:hover {
@@ -781,6 +841,14 @@
 </head>
 <body>
 
+<div class="save-warning-backdrop" id="save-warning-backdrop" style="display:none;">
+  <div class="save-warning-modal">
+    <h2>No save file connected</h2>
+    <p id="save-warning-text">Your tasks are only saved in this browser. Connect a save file now to avoid losing your data.</p>
+    <button class="save-status-btn" id="save-warning-btn"></button>
+  </div>
+</div>
+
 <header>
   <div class="header-left">
     <div class="history-controls">
@@ -788,7 +856,7 @@
       <button class="history-btn" id="redo-btn" title="Redo (Ctrl+Y)" disabled>&#8631;</button>
       <button class="history-btn" id="theme-toggle-btn" title="Switch to dark mode">&#9789;</button>
     </div>
-    <h1>Kanban <span class="version-badge">v1.2</span></h1>
+    <h1>Kanban <span class="version-badge">v1.3</span></h1>
   </div>
   <div class="header-right">
     <div class="save-status" id="save-status">
@@ -849,7 +917,7 @@
 
 <script>
 (function () {
-  const APP_VERSION = 'v1.2';
+  const APP_VERSION = 'v1.3';
   const STORAGE_KEY = 'kanban-personal-board-v1';
   const THEME_STORAGE_KEY = 'kanban-theme-v1';
   const COLS = ['todo', 'doing', 'done'];
@@ -953,6 +1021,7 @@
   let fileHandle = null;
   let pendingHandle = null;
   let fileHandleNeedsPermission = false;
+  let fileConnectionChecked = false;
   let writeQueue = Promise.resolve();
 
   let state = load();
@@ -1020,6 +1089,7 @@
     if (!supportsFS) {
       textEl.textContent = 'autosaving in this browser only';
       btnEl.style.display = 'none';
+      document.getElementById('save-warning-backdrop').style.display = 'none';
       return;
     }
     if (fileHandle) {
@@ -1035,6 +1105,23 @@
       textEl.textContent = 'autosaving in this browser only';
       btnEl.textContent = 'Connect save file';
       btnEl.style.display = '';
+    }
+
+    const backdrop = document.getElementById('save-warning-backdrop');
+    const warnBtn = document.getElementById('save-warning-btn');
+    const warnText = document.getElementById('save-warning-text');
+    const shouldWarn = fileConnectionChecked && !fileHandle;
+    backdrop.style.display = shouldWarn ? 'flex' : 'none';
+    if (shouldWarn) {
+      if (fileHandleNeedsPermission) {
+        warnText.textContent = 'Your save file connection needs to be re-confirmed after a browser restart.';
+        warnBtn.textContent = 'Reconnect';
+        warnBtn.onclick = reconnectSaveFile;
+      } else {
+        warnText.textContent = 'Your tasks are only saved in this browser. Connect a save file now to avoid losing your data.';
+        warnBtn.textContent = 'Load existing file…';
+        warnBtn.onclick = loadSaveFile;
+      }
     }
   }
 
@@ -1179,6 +1266,7 @@
   }
 
   async function initFileConnection() {
+    fileConnectionChecked = true;
     if (!supportsFS) { updateSaveFileStatus(); return; }
     const handle = await getStoredHandle();
     if (!handle) { updateSaveFileStatus(); return; }
@@ -1210,6 +1298,13 @@
   // Ephemeral UI-only state — never touches state/save()/pushHistory(), resets on reload.
   let expandedStacks = new Set();
   let expandedCards = new Set();
+
+  // Touch drag-and-drop (mobile). Mirrors desktop HTML5 DnD state but driven by touch events.
+  const TOUCH_LONG_PRESS_MS = 450;
+  const TOUCH_MOVE_CANCEL_PX = 10;   // pre-arm: finger travel that cancels the long-press (treat as scroll)
+  const TOUCH_SCROLL_EDGE_PX = 60;   // distance from viewport top/bottom that triggers auto-scroll
+  const TOUCH_SCROLL_MAX_SPEED = 18; // px per animation frame at the edge
+  let touchDrag = null;
 
   function pushHistory() {
     undoStack.push(JSON.stringify(state));
@@ -1313,6 +1408,24 @@
         e.stopPropagation();
         startRenameProject(p, nameSpan);
       });
+
+      if (p.id !== state.activeProjectId) {
+        tab.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          tab.classList.add('drag-over');
+          e.dataTransfer.dropEffect = 'move';
+        });
+        tab.addEventListener('dragleave', () => {
+          tab.classList.remove('drag-over');
+        });
+        tab.addEventListener('drop', (e) => {
+          e.preventDefault();
+          tab.classList.remove('drag-over');
+          const id = e.dataTransfer.getData('text/plain');
+          moveItemToProject(id, p.id);
+          render();
+        });
+      }
 
       tabsEl.appendChild(tab);
     });
@@ -1547,7 +1660,7 @@
           card.draggable = true;
           card.classList.remove('editing');
           editingNow = false;
-          const newText = text.textContent.trim();
+          const newText = extractEditableText(text).trim();
           if (!newText) {
             removeItem(item.id);
             render();
@@ -1753,6 +1866,56 @@
           card.classList.remove('dragging');
         });
 
+        card.addEventListener('touchstart', (e) => {
+          if (editingNow) return;
+          if (e.target.closest('.card-menu, .checklist-row, .card-truncate-toggle')) return;
+          const touch = e.touches[0];
+          touchDrag = {
+            itemId: item.id,
+            originCard: card,
+            startX: touch.clientX,
+            startY: touch.clientY,
+            armed: false,
+            ghost: null,
+            ghostOffsetX: 0,
+            ghostOffsetY: 0,
+            currentDropEl: null,
+            scrollSpeed: 0,
+            rafId: null,
+            longPressTimer: null
+          };
+          touchDrag.longPressTimer = setTimeout(armTouchDrag, TOUCH_LONG_PRESS_MS);
+        }, { passive: true });
+
+        card.addEventListener('touchmove', (e) => {
+          if (!touchDrag || touchDrag.originCard !== card) return;
+          const touch = e.touches[0];
+          if (!touchDrag.armed) {
+            const dx = touch.clientX - touchDrag.startX;
+            const dy = touch.clientY - touchDrag.startY;
+            if (Math.hypot(dx, dy) > TOUCH_MOVE_CANCEL_PX) {
+              cleanupTouchDrag();
+            }
+            return;
+          }
+          e.preventDefault();
+          updateTouchDragPosition(touch.clientX, touch.clientY);
+        }, { passive: false });
+
+        card.addEventListener('touchend', () => {
+          if (!touchDrag || touchDrag.originCard !== card) return;
+          if (touchDrag.armed) {
+            finishTouchDrag();
+          } else {
+            cleanupTouchDrag();
+          }
+        }, { passive: true });
+
+        card.addEventListener('touchcancel', () => {
+          if (!touchDrag || touchDrag.originCard !== card) return;
+          cleanupTouchDrag();
+        }, { passive: true });
+
         zone.appendChild(card);
       });
 
@@ -1825,6 +1988,52 @@
     save(state);
   }
 
+  // Shared by desktop drop and touch-drag drop: finds the index to insert at
+  // within `zone` based on a vertical coordinate, using the midpoint of each
+  // existing (non-dragging) card.
+  // Reads the plain-text content of an edited card's contentEditable div,
+  // reconstructing a '\n' at each block/line boundary. Plain `.textContent`
+  // silently drops line breaks: Shift+Enter (via execCommand('insertText'))
+  // produces a new <div> (with a lone <br> if the line is still empty), not a
+  // literal '\n' character, and .textContent has no separator for those
+  // boundaries at all. `.innerText` was tried and rejected — it double-counts
+  // a trailing empty <div><br></div> line, since the <br> and the div
+  // boundary each independently contribute a break.
+  function extractEditableText(root) {
+    let text = '';
+    function walk(node) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        text += node.nodeValue;
+        return;
+      }
+      if (node.nodeType !== Node.ELEMENT_NODE) return;
+      if (node.tagName === 'BR') {
+        text += '\n';
+        return;
+      }
+      if (node.tagName === 'DIV' || node.tagName === 'P') {
+        text += '\n';
+        const onlyChild = node.childNodes.length === 1 ? node.childNodes[0] : null;
+        if (onlyChild && onlyChild.nodeType === Node.ELEMENT_NODE && onlyChild.tagName === 'BR') {
+          return; // empty-line placeholder — already accounted for by the '\n' above
+        }
+        for (const child of node.childNodes) walk(child);
+        return;
+      }
+      for (const child of node.childNodes) walk(child);
+    }
+    for (const child of root.childNodes) walk(child);
+    return text;
+  }
+
+  function computeTargetIndex(zone, clientY) {
+    const after = [...zone.querySelectorAll('.card:not(.dragging)')].find(card => {
+      const rect = card.getBoundingClientRect();
+      return clientY < rect.top + rect.height / 2;
+    });
+    return after ? [...zone.children].indexOf(after) : undefined;
+  }
+
   COLS.forEach(col => {
     const zone = document.getElementById('dropzone-' + col);
 
@@ -1842,20 +2051,111 @@
       e.preventDefault();
       zone.classList.remove('drag-over');
       const id = e.dataTransfer.getData('text/plain');
-
-      let targetIndex;
-      const after = [...zone.querySelectorAll('.card:not(.dragging)')].find(card => {
-        const rect = card.getBoundingClientRect();
-        return e.clientY < rect.top + rect.height / 2;
-      });
-      if (after) {
-        targetIndex = [...zone.children].indexOf(after);
-      }
-
+      const targetIndex = computeTargetIndex(zone, e.clientY);
       moveItem(id, col, targetIndex);
       render();
     });
   });
+
+  // ---- Touch drag-and-drop (mobile long-press-to-drag) ----
+
+  function armTouchDrag() {
+    if (!touchDrag) return;
+    touchDrag.armed = true;
+    touchDrag.originCard.classList.add('dragging');
+    const rect = touchDrag.originCard.getBoundingClientRect();
+    const ghost = touchDrag.originCard.cloneNode(true);
+    ghost.classList.remove('dragging');
+    ghost.classList.add('card-ghost');
+    ghost.style.width = rect.width + 'px';
+    ghost.style.left = rect.left + 'px';
+    ghost.style.top = rect.top + 'px';
+    document.body.appendChild(ghost);
+    touchDrag.ghost = ghost;
+    touchDrag.ghostOffsetX = touchDrag.startX - rect.left;
+    touchDrag.ghostOffsetY = touchDrag.startY - rect.top;
+  }
+
+  function findDropTarget(x, y) {
+    const el = document.elementFromPoint(x, y);
+    if (!el) return null;
+    const tab = el.closest('.project-tab');
+    if (tab) return { type: 'tab', el: tab };
+    const zone = el.closest('.dropzone');
+    if (zone) return { type: 'zone', el: zone };
+    return null;
+  }
+
+  function updateTouchDragAutoScroll(clientY) {
+    const vh = window.innerHeight;
+    let speed = 0;
+    if (clientY < TOUCH_SCROLL_EDGE_PX) {
+      speed = -TOUCH_SCROLL_MAX_SPEED * (1 - clientY / TOUCH_SCROLL_EDGE_PX);
+    } else if (clientY > vh - TOUCH_SCROLL_EDGE_PX) {
+      speed = TOUCH_SCROLL_MAX_SPEED * (1 - (vh - clientY) / TOUCH_SCROLL_EDGE_PX);
+    }
+    touchDrag.scrollSpeed = speed;
+    if (speed !== 0 && touchDrag.rafId === null) {
+      const step = () => {
+        if (!touchDrag || touchDrag.scrollSpeed === 0) {
+          if (touchDrag) touchDrag.rafId = null;
+          return;
+        }
+        window.scrollBy(0, touchDrag.scrollSpeed);
+        touchDrag.rafId = requestAnimationFrame(step);
+      };
+      touchDrag.rafId = requestAnimationFrame(step);
+    } else if (speed === 0 && touchDrag.rafId !== null) {
+      cancelAnimationFrame(touchDrag.rafId);
+      touchDrag.rafId = null;
+    }
+  }
+
+  function updateTouchDragPosition(clientX, clientY) {
+    if (!touchDrag.ghost) return;
+    touchDrag.ghost.style.left = (clientX - touchDrag.ghostOffsetX) + 'px';
+    touchDrag.ghost.style.top = (clientY - touchDrag.ghostOffsetY) + 'px';
+
+    const target = findDropTarget(clientX, clientY);
+    const targetEl = target ? target.el : null;
+    if (targetEl !== touchDrag.currentDropEl) {
+      if (touchDrag.currentDropEl) touchDrag.currentDropEl.classList.remove('drag-over');
+      if (targetEl && !(target.type === 'tab' && targetEl.dataset.id === state.activeProjectId)) {
+        targetEl.classList.add('drag-over');
+        touchDrag.currentDropEl = targetEl;
+      } else {
+        touchDrag.currentDropEl = null;
+      }
+    }
+
+    updateTouchDragAutoScroll(clientY);
+  }
+
+  function finishTouchDrag() {
+    const lastX = touchDrag.ghost ? parseFloat(touchDrag.ghost.style.left) + touchDrag.ghostOffsetX : touchDrag.startX;
+    const lastY = touchDrag.ghost ? parseFloat(touchDrag.ghost.style.top) + touchDrag.ghostOffsetY : touchDrag.startY;
+    const target = findDropTarget(lastX, lastY);
+    if (target && target.type === 'tab' && target.el.dataset.id !== state.activeProjectId) {
+      moveItemToProject(touchDrag.itemId, target.el.dataset.id);
+      render();
+    } else if (target && target.type === 'zone') {
+      const targetCol = target.el.dataset.col;
+      const targetIndex = computeTargetIndex(target.el, lastY);
+      moveItem(touchDrag.itemId, targetCol, targetIndex);
+      render();
+    }
+    cleanupTouchDrag();
+  }
+
+  function cleanupTouchDrag() {
+    if (!touchDrag) return;
+    if (touchDrag.longPressTimer) clearTimeout(touchDrag.longPressTimer);
+    if (touchDrag.rafId) cancelAnimationFrame(touchDrag.rafId);
+    if (touchDrag.ghost) touchDrag.ghost.remove();
+    if (touchDrag.originCard) touchDrag.originCard.classList.remove('dragging');
+    if (touchDrag.currentDropEl) touchDrag.currentDropEl.classList.remove('drag-over');
+    touchDrag = null;
+  }
 
   document.querySelectorAll('.add-input').forEach(input => {
     input.addEventListener('keydown', (e) => {

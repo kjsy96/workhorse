@@ -4,7 +4,7 @@ A single-file, zero-dependency kanban board — drag-and-drop tasks across To Do
 
 This started as a hands-on project for building fluency with Claude: the first several versions were built conversationally in the Claude.ai chat interface, then the project moved to Claude Code once it needed real version control, a proper git workflow, and more structured, file-aware development. The commit history and `CLAUDE.md` in this repo reflect that transition — `CLAUDE.md` is the handoff document written for Claude Code itself, capturing the bugs, architecture decisions, and conventions from the chat-based sessions so that context wasn't lost when switching tools.
 
-Open `kanban-v1.2.html` in Chrome or Edge — no install, no build step, no server. Load `kanban-example-data.json` from the app's save-file menu to try it out with sample data.
+Open `kanban.html` in Chrome or Edge — no install, no build step, no server. Load `kanban-example-data.json` from the app's save-file menu to try it out with sample data.
 
 ## Features
 
@@ -16,6 +16,9 @@ Open `kanban-v1.2.html` in Chrome or Edge — no install, no build step, no serv
 - **Done-column stacking** — once a column has more than a handful of finished tasks, the extras collapse into an expandable stack so completed work doesn't crowd the board
 - **Card truncation** — long cards clamp to a fixed height with a "Show more" toggle, measured by actual rendered height rather than counting newlines
 - **Dark mode** — follows your OS preference on first visit, remembered after that
+- **Drag a card onto a project tab** to move it, alongside the existing per-card "Move to" menu action
+- **Mobile/touch support** — long-press a card to pick it up, drag to reorder, switch columns, or drop it onto a project tab, with auto-scroll near the screen edges
+- **Save-file warning** — a persistent on-screen prompt if no save file is connected, so you don't lose work by assuming it's synced to disk when it's only in the browser
 
 ## Notable bugs I found and fixed
 
@@ -37,4 +40,4 @@ Chrome and Edge only. The autosave-to-disk feature depends on the File System Ac
 
 ## Versioning
 
-Each meaningful change ships as a new versioned file (`kanban-v1.0.html`, `kanban-v1.1.html`, `kanban-v1.2.html`, …) rather than being edited in place, so every prior version stays around and diffable in `Archive/`. See the [Releases](../../releases) page for what changed in each version.
+Early on, each meaningful change shipped as a new versioned file (`kanban-v1.0.html`, `kanban-v1.1.html`, `kanban-v1.2.html`, …) rather than being edited in place — those are preserved as-is in `Archive/`. Once this project moved to git, that scheme was replaced with normal git tags and commits against a single `kanban.html`, which is what version control is for. See the [Releases](../../releases) page for what changed in each version.

@@ -31,6 +31,12 @@
           "deadline": "2026-08-01"
         },
         {
+          "id": "mrxgeomest3r1",
+          "text": "notes:\nLorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.",
+          "created": 1784807675942,
+          "deadline": null
+        },
+        {
           "id": "launch-d2",
           "text": "Negotiate scope with the client who wants \"just one more feature\"",
           "created": 1784160000000,
@@ -102,6 +108,13 @@
           "deadline": null
         }
       ]
+    },
+    {
+      "id": "mrxgbdlyud999",
+      "name": "New Project",
+      "todo": [],
+      "doing": [],
+      "done": []
     }
   ],
   "activeProjectId": "proj-launch"
