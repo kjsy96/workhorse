@@ -1,0 +1,11 @@
+{
+  "name": "kanban-board-ci",
+  "private": true,
+  "description": "CI tooling only. kanban.html itself is a zero-build-step, dependency-free single file and does not need anything in here to run.",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0"
+  }
+}

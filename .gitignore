@@ -4,3 +4,10 @@ Archive/kanban-data - Copy.json
 
 # Local Claude Code settings (machine-specific, not shared project config)
 .claude/
+
+# CI tooling (Playwright) - node_modules and test artifacts, not the app itself
+node_modules/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
