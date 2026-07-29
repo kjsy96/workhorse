@@ -297,6 +297,7 @@
     color: var(--ink-soft);
     cursor: pointer;
     box-shadow: var(--shadow);
+    position: relative;
     transition: box-shadow .15s ease, transform .15s ease, color .15s ease, background .15s ease, border-color .15s ease;
   }
 
@@ -441,7 +442,21 @@
 
   .project-tab.drag-over::before {
     content: '\2192';
+    position: absolute;
+    top: -8px;
+    right: -6px;
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     font-weight: 700;
+    font-size: 11px;
+    background: var(--paper);
+    border: 1px solid var(--todo);
+    border-radius: 50%;
+    box-shadow: var(--shadow);
+    pointer-events: none;
   }
 
   .card {
