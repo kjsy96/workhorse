@@ -459,6 +459,18 @@
     pointer-events: none;
   }
 
+  .project-tab.tab-dragging {
+    opacity: 0.4;
+  }
+
+  .project-tab.tab-insert-before {
+    box-shadow: inset 3px 0 0 var(--todo);
+  }
+
+  .project-tab.tab-insert-after {
+    box-shadow: inset -3px 0 0 var(--todo);
+  }
+
   .card {
     background: var(--paper);
     border: 1px solid var(--line);
@@ -1391,6 +1403,7 @@
       const tab = document.createElement('div');
       tab.className = 'project-tab' + (p.id === state.activeProjectId ? ' active' : '');
       tab.dataset.id = p.id;
+      tab.draggable = true;
 
       const nameSpan = document.createElement('span');
       nameSpan.className = 'project-tab-name';
@@ -1424,23 +1437,53 @@
         startRenameProject(p, nameSpan);
       });
 
-      if (p.id !== state.activeProjectId) {
-        tab.addEventListener('dragover', (e) => {
+      tab.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('application/x-project-tab', p.id);
+        e.dataTransfer.effectAllowed = 'move';
+        tab.classList.add('tab-dragging');
+      });
+      tab.addEventListener('dragend', () => {
+        tab.classList.remove('tab-dragging');
+      });
+
+      tab.addEventListener('dragover', (e) => {
+        if (e.dataTransfer.types.includes('application/x-project-tab')) {
+          if (tab.classList.contains('tab-dragging')) return;
+          e.preventDefault();
+          const rect = tab.getBoundingClientRect();
+          const before = e.clientX < rect.left + rect.width / 2;
+          tab.classList.toggle('tab-insert-before', before);
+          tab.classList.toggle('tab-insert-after', !before);
+          e.dataTransfer.dropEffect = 'move';
+        } else if (p.id !== state.activeProjectId) {
           e.preventDefault();
           tab.classList.add('drag-over');
           e.dataTransfer.dropEffect = 'move';
-        });
-        tab.addEventListener('dragleave', () => {
-          tab.classList.remove('drag-over');
-        });
-        tab.addEventListener('drop', (e) => {
-          e.preventDefault();
-          tab.classList.remove('drag-over');
+        }
+      });
+      tab.addEventListener('dragleave', () => {
+        tab.classList.remove('drag-over', 'tab-insert-before', 'tab-insert-after');
+      });
+      tab.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const insertBefore = tab.classList.contains('tab-insert-before');
+        tab.classList.remove('drag-over', 'tab-insert-before', 'tab-insert-after');
+
+        const draggedTabId = e.dataTransfer.getData('application/x-project-tab');
+        if (draggedTabId) {
+          if (draggedTabId === p.id) return;
+          const targetIndex = state.projects.findIndex(pr => pr.id === p.id) + (insertBefore ? 0 : 1);
+          reorderProject(draggedTabId, targetIndex);
+          render();
+          return;
+        }
+
+        if (p.id !== state.activeProjectId) {
           const id = e.dataTransfer.getData('text/plain');
           moveItemToProject(id, p.id);
           render();
-        });
-      }
+        }
+      });
 
       tabsEl.appendChild(tab);
     });
@@ -2003,6 +2046,20 @@
     save(state);
   }
 
+  // targetIndex is the position within the current (pre-removal) projects
+  // array to insert at; adjusted below to account for the array shrinking
+  // by one once the dragged project is spliced out ahead of that point.
+  function reorderProject(id, targetIndex) {
+    const fromIndex = state.projects.findIndex(p => p.id === id);
+    if (fromIndex === -1) return;
+    pushHistory();
+    const [proj] = state.projects.splice(fromIndex, 1);
+    let insertAt = fromIndex < targetIndex ? targetIndex - 1 : targetIndex;
+    insertAt = Math.max(0, Math.min(insertAt, state.projects.length));
+    state.projects.splice(insertAt, 0, proj);
+    save(state);
+  }
+
   // Shared by desktop drop and touch-drag drop: finds the index to insert at
   // within `zone` based on a vertical coordinate, using the midpoint of each
   // existing (non-dragging) card.
@@ -2070,6 +2127,26 @@
       moveItem(id, col, targetIndex);
       render();
     });
+  });
+
+  // Catches a tab drag dropped in empty space after the last tab (not on any
+  // specific tab) -- appends the dragged project to the end. Set up once
+  // here since #project-tabs itself persists across renders, unlike the
+  // individual .project-tab children which are rebuilt every renderTabs().
+  const projectTabsEl = document.getElementById('project-tabs');
+  projectTabsEl.addEventListener('dragover', (e) => {
+    if (e.dataTransfer.types.includes('application/x-project-tab')) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+    }
+  });
+  projectTabsEl.addEventListener('drop', (e) => {
+    if (e.target !== projectTabsEl) return;
+    const draggedTabId = e.dataTransfer.getData('application/x-project-tab');
+    if (draggedTabId) {
+      reorderProject(draggedTabId, state.projects.length);
+      render();
+    }
   });
 
   // ---- Touch drag-and-drop (mobile long-press-to-drag) ----
