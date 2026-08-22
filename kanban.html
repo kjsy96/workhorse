@@ -54,7 +54,21 @@
 
 <div class="project-tabs" id="project-tabs"></div>
 
+<div class="project-toolbar" id="project-toolbar"></div>
+
 <div class="board" id="board">
+  <div class="column" data-col="backlog">
+    <div class="column-head">
+      <span class="dot"></span>
+      <span class="column-title">Backlog</span>
+      <span class="count" data-count="backlog">0</span>
+    </div>
+    <div class="add-row">
+      <textarea class="add-input" data-col="backlog" rows="1" placeholder="+ add a task, press Enter"></textarea>
+    </div>
+    <div class="dropzone" data-col="backlog" id="dropzone-backlog"></div>
+  </div>
+
   <div class="column" data-col="todo">
     <div class="column-head">
       <span class="dot"></span>
@@ -79,6 +93,18 @@
     <div class="dropzone" data-col="doing" id="dropzone-doing"></div>
   </div>
 
+  <div class="column" data-col="review">
+    <div class="column-head">
+      <span class="dot"></span>
+      <span class="column-title">Review</span>
+      <span class="count" data-count="review">0</span>
+    </div>
+    <div class="add-row">
+      <textarea class="add-input" data-col="review" rows="1" placeholder="+ add a task, press Enter"></textarea>
+    </div>
+    <div class="dropzone" data-col="review" id="dropzone-review"></div>
+  </div>
+
   <div class="column" data-col="done">
     <div class="column-head">
       <span class="dot"></span>
@@ -96,6 +122,7 @@
 
 <script src="kanban-core.js"></script>
 <script src="kanban-render.js"></script>
+<script src="kanban-scrum.js"></script>
 
 </body>
 </html>

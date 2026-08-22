@@ -1,7 +1,7 @@
   const APP_VERSION = 'v1.3.1';
   const STORAGE_KEY = 'kanban-personal-board-v1';
   const THEME_STORAGE_KEY = 'kanban-theme-v1';
-  const COLS = ['todo', 'doing', 'done'];
+  const COLS = ['backlog', 'todo', 'doing', 'review', 'done'];
   const DONE_STACK_VISIBLE_COUNT = 4;
   const TRUNCATE_CLAMP_HEIGHT = 190; // px; keep in sync with .card-list-view.clamped max-height below
   const supportsFS = 'showSaveFilePicker' in window && 'showOpenFilePicker' in window;
@@ -15,7 +15,11 @@
   }
 
   function makeProject(name) {
-    return { id: uid(), name: name, todo: [], doing: [], done: [] };
+    return {
+      id: uid(), name: name,
+      todo: [], doing: [], review: [], done: [],
+      backlog: [], mode: 'kanban', activeSprint: null, sprints: []
+    };
   }
 
   function migrateItem(item) {
@@ -43,6 +47,11 @@
       COLS.forEach(col => {
         (p[col] || []).forEach(migrateItem);
       });
+      if (!p.mode) p.mode = 'kanban';
+      if (!Array.isArray(p.backlog)) p.backlog = [];
+      if (!Array.isArray(p.review)) p.review = [];
+      if (!Array.isArray(p.sprints)) p.sprints = [];
+      if (p.activeSprint === undefined) p.activeSprint = null;
     });
     if (!parsed.activeProjectId || !parsed.projects.some(p => p.id === parsed.activeProjectId)) {
       parsed.activeProjectId = parsed.projects[0].id;

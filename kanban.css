@@ -10,6 +10,10 @@
     --doing-bg: #F5EBDA;
     --done: #6B8F71;
     --done-bg: #E7EFE7;
+    --backlog: #8A6C8F;
+    --backlog-bg: #F0E7F0;
+    --review: #3F8F8A;
+    --review-bg: #E2F0EE;
     --overlay: rgba(35,39,43,0.06);
     --danger: #B23B3B;
     --danger-bg: #F5E1E1;
@@ -30,6 +34,10 @@
     --doing-bg: #33291A;
     --done: #85AC8B;
     --done-bg: #212C22;
+    --backlog: #B090B5;
+    --backlog-bg: #2E2430;
+    --review: #6BB5AF;
+    --review-bg: #1D2E2C;
     --overlay: rgba(255,255,255,0.06);
     --danger: #E08585;
     --danger-bg: #3A2323;
@@ -264,6 +272,23 @@
     flex-wrap: wrap;
   }
 
+  .project-toolbar {
+    max-width: 1480px;
+    margin: 0 auto 28px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .project-toolbar:empty {
+    display: none;
+  }
+
+  .toolbar-mode-btn {
+    font-weight: 500;
+  }
+
   .project-tab {
     display: flex;
     align-items: center;
@@ -348,6 +373,11 @@
     gap: 24px;
   }
 
+  .board.mode-scrum {
+    max-width: 1480px;
+    grid-template-columns: minmax(200px, 0.8fr) repeat(4, 1fr);
+  }
+
   @media (max-width: 860px) {
     .board { grid-template-columns: 1fr; }
   }
@@ -357,6 +387,16 @@
     display: flex;
     flex-direction: column;
     min-height: 120px;
+  }
+
+  .column[data-col="backlog"],
+  .column[data-col="review"] {
+    display: none;
+  }
+
+  .board.mode-scrum .column[data-col="backlog"],
+  .board.mode-scrum .column[data-col="review"] {
+    display: flex;
   }
 
   .column-head {
@@ -374,8 +414,10 @@
     flex-shrink: 0;
   }
 
+  .column[data-col="backlog"] .dot { background: var(--backlog); }
   .column[data-col="todo"] .dot { background: var(--todo); }
   .column[data-col="doing"] .dot { background: var(--doing); }
+  .column[data-col="review"] .dot { background: var(--review); }
   .column[data-col="done"] .dot { background: var(--done); }
 
   .column-title {
@@ -512,8 +554,10 @@
     box-shadow: 0 2px 3px rgba(35,39,43,0.25);
   }
 
+  .column[data-col="backlog"] .card .pin { background: var(--backlog); }
   .column[data-col="todo"] .card .pin { background: var(--todo); }
   .column[data-col="doing"] .card .pin { background: var(--doing); }
+  .column[data-col="review"] .card .pin { background: var(--review); }
   .column[data-col="done"] .card .pin { background: var(--done); }
 
   .card-text {

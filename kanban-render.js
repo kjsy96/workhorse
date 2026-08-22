@@ -26,6 +26,7 @@
 
   function render() {
     renderTabs();
+    renderProjectToolbar();
     renderBoard();
     updateHistoryButtons();
   }
@@ -970,7 +971,3 @@
       redo();
     }
   });
-
-  render();
-  updateSaveFileStatus();
-  initFileConnection().catch(err => console.error('File connection init failed', err));

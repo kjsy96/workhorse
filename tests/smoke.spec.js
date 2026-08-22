@@ -49,3 +49,41 @@ test('adding a task updates the column', async ({ page }) => {
 
   expect(errors, 'no console/page errors while adding a task').toEqual([]);
 });
+
+test('switching a project to Scrum mode reveals Backlog/Review and moves existing tasks there', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
+
+  await page.goto(KANBAN_URL);
+  await page.evaluate(() => {
+    const backdrop = document.getElementById('save-warning-backdrop');
+    if (backdrop) backdrop.style.display = 'none';
+  });
+
+  // Kanban mode by default: Backlog/Review exist in the DOM but stay hidden.
+  await expect(page.locator('.column[data-col="backlog"]')).toBeHidden();
+  await expect(page.locator('.column[data-col="review"]')).toBeHidden();
+
+  const input = page.locator('.add-input[data-col="todo"]');
+  await input.fill('Pre-existing task');
+  await input.press('Enter');
+  await expect(page.locator('[data-count="todo"]')).toHaveText('1');
+
+  page.once('dialog', (d) => d.accept());
+  await page.locator('.toolbar-mode-btn').click();
+
+  await expect(page.locator('.toolbar-mode-btn')).toHaveText('Scrum mode');
+  await expect(page.locator('.column[data-col="backlog"]')).toBeVisible();
+  await expect(page.locator('.column[data-col="review"]')).toBeVisible();
+  await expect(page.locator('[data-count="backlog"]')).toHaveText('1');
+  await expect(page.locator('[data-count="todo"]')).toHaveText('0');
+
+  // Switching back to Kanban is a pure visibility change -- no data moves.
+  await page.locator('.toolbar-mode-btn').click();
+  await expect(page.locator('.toolbar-mode-btn')).toHaveText('Kanban mode');
+  await expect(page.locator('.column[data-col="backlog"]')).toBeHidden();
+  await expect(page.locator('[data-count="backlog"]')).toHaveText('1');
+
+  expect(errors, 'no console/page errors while toggling Scrum mode').toEqual([]);
+});
