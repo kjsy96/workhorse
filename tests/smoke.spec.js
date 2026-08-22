@@ -87,3 +87,62 @@ test('switching a project to Scrum mode reveals Backlog/Review and moves existin
 
   expect(errors, 'no console/page errors while toggling Scrum mode').toEqual([]);
 });
+
+test('starting and completing a sprint moves items and records history', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
+
+  await page.goto(KANBAN_URL);
+  await page.evaluate(() => {
+    const backdrop = document.getElementById('save-warning-backdrop');
+    if (backdrop) backdrop.style.display = 'none';
+  });
+
+  page.on('dialog', (d) => d.accept());
+  await page.locator('.toolbar-mode-btn').click();
+  await expect(page.locator('.toolbar-mode-btn')).toHaveText('Scrum mode');
+
+  const backlogInput = page.locator('.add-input[data-col="backlog"]');
+  await backlogInput.fill('Sprint task one');
+  await backlogInput.press('Enter');
+  await backlogInput.fill('Sprint task two');
+  await backlogInput.press('Enter');
+  await expect(page.locator('[data-count="backlog"]')).toHaveText('2');
+
+  await page.locator('#project-toolbar button', { hasText: 'Start Sprint' }).click();
+  await expect(page.locator('#sprint-modal-backdrop')).toBeVisible();
+
+  await page.locator('#sprint-name-input').fill('Sprint 1');
+  await page.locator('#sprint-goal-input').fill('Ship the thing');
+  await page.locator('#sprint-start-input').fill('2026-01-01');
+  await page.locator('#sprint-end-input').fill('2026-01-14');
+  await page.locator('#sprint-modal-checklist .checklist-row', { hasText: 'Sprint task one' }).locator('input[type="checkbox"]').check();
+  await page.locator('#sprint-modal-submit').click();
+
+  await expect(page.locator('#sprint-modal-backdrop')).toBeHidden();
+  await expect(page.locator('.sprint-info-name')).toHaveText('Sprint 1');
+  await expect(page.locator('.sprint-info-goal')).toHaveText('Ship the thing');
+  await expect(page.locator('[data-count="todo"]')).toHaveText('1');
+  await expect(page.locator('[data-count="backlog"]')).toHaveText('1'); // task two stayed behind
+
+  // drag the sprint's one task through In progress and Review before completing
+  await page.locator('#dropzone-todo .card').dragTo(page.locator('#dropzone-review'));
+  await expect(page.locator('[data-count="review"]')).toHaveText('1');
+
+  await page.locator('#project-toolbar button', { hasText: 'Complete Sprint' }).click();
+
+  await expect(page.locator('#project-toolbar button', { hasText: 'Start Sprint' })).toBeVisible();
+  await expect(page.locator('[data-count="review"]')).toHaveText('0');
+  await expect(page.locator('[data-count="backlog"]')).toHaveText('2'); // unfinished task returned
+
+  await page.locator('.sprint-history-stack').click();
+  await expect(page.locator('.sprint-history-row')).toContainText('Sprint 1');
+
+  // reload and confirm the sprint history and mode both persisted (localStorage)
+  await page.reload();
+  await expect(page.locator('.toolbar-mode-btn')).toHaveText('Scrum mode');
+  await expect(page.locator('[data-count="backlog"]')).toHaveText('2');
+
+  expect(errors, 'no console/page errors across the sprint start/complete flow').toEqual([]);
+});

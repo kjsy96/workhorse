@@ -28,6 +28,32 @@
   </div>
 </div>
 
+<div class="sprint-modal-backdrop" id="sprint-modal-backdrop" style="display:none;">
+  <div class="sprint-modal">
+    <h2>Start a sprint</h2>
+    <label class="sprint-modal-label">Name
+      <input type="text" id="sprint-name-input" class="card-menu-date-input sprint-modal-input" placeholder="Sprint 1">
+    </label>
+    <label class="sprint-modal-label">Goal (optional)
+      <input type="text" id="sprint-goal-input" class="card-menu-date-input sprint-modal-input" placeholder="What are we trying to achieve?">
+    </label>
+    <div class="sprint-modal-dates">
+      <label class="sprint-modal-label">Start date
+        <input type="date" id="sprint-start-input" class="card-menu-date-input sprint-modal-input">
+      </label>
+      <label class="sprint-modal-label">End date
+        <input type="date" id="sprint-end-input" class="card-menu-date-input sprint-modal-input">
+      </label>
+    </div>
+    <div class="sprint-modal-label">Include from Backlog</div>
+    <div class="sprint-modal-checklist" id="sprint-modal-checklist"></div>
+    <div class="sprint-modal-actions">
+      <button class="save-status-btn" id="sprint-modal-cancel">Cancel</button>
+      <button class="save-status-btn" id="sprint-modal-submit">Start Sprint</button>
+    </div>
+  </div>
+</div>
+
 <header>
   <div class="header-left">
     <div class="history-controls">
