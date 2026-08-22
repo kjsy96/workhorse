@@ -14,6 +14,11 @@
     modeBtn.addEventListener('click', () => toggleProjectMode(proj));
     toolbar.appendChild(modeBtn);
 
+    const burndownContainer = document.getElementById('burndown-container');
+    if (proj.mode !== 'scrum' || !proj.activeSprint) {
+      burndownContainer.innerHTML = '';
+    }
+
     if (proj.mode !== 'scrum') return;
 
     if (proj.activeSprint) {
@@ -44,6 +49,9 @@
       completeBtn.textContent = 'Complete Sprint';
       completeBtn.addEventListener('click', () => completeSprint(proj));
       toolbar.appendChild(completeBtn);
+
+      upsertTodayBurndownPoint(proj);
+      renderBurndownChart(burndownContainer, proj.activeSprint);
     } else {
       const startBtn = document.createElement('button');
       startBtn.className = 'save-status-btn';
@@ -215,6 +223,88 @@
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeStartSprintModal();
   });
+
+  function todayDateStr() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+
+  function sprintRemaining(proj, sprint) {
+    const active = proj.todo.concat(proj.doing, proj.review);
+    return sprint.unit === 'points'
+      ? active.reduce((sum, i) => sum + (i.points || 0), 0)
+      : active.length;
+  }
+
+  function upsertTodayBurndownPoint(proj) {
+    const sprint = proj.activeSprint;
+    const remaining = sprintRemaining(proj, sprint);
+    const today = todayDateStr();
+    const existing = sprint.burnHistory.find(p => p.date === today);
+    if (existing) {
+      if (existing.remaining === remaining) return;
+      existing.remaining = remaining;
+    } else {
+      sprint.burnHistory.push({ date: today, remaining: remaining });
+    }
+    save(state);
+  }
+
+  // Normalizes any date to its 0..1 position between a sprint's start/end,
+  // clamped -- so a burn-history entry from outside the sprint's own date
+  // range (edge case, but possible if dates get edited or a snapshot is old)
+  // still plots at a valid, on-chart position instead of producing NaN/
+  // off-chart SVG coordinates.
+  function dateFraction(dateStr, startDate, endDate) {
+    const toDays = (s) => {
+      const parts = s.split('-').map(Number);
+      return Date.UTC(parts[0], parts[1] - 1, parts[2]) / 86400000;
+    };
+    const start = toDays(startDate), end = toDays(endDate), cur = toDays(dateStr);
+    if (end <= start) return 0;
+    return Math.max(0, Math.min(1, (cur - start) / (end - start)));
+  }
+
+  function renderBurndownChart(container, sprint) {
+    const total = sprint.startingTotal;
+    const unitLabel = sprint.unit === 'points' ? 'points' : 'tasks';
+
+    if (total <= 0) {
+      container.innerHTML =
+        '<div class="burndown-empty">No ' + unitLabel + ' to burn down yet — this sprint started empty.</div>';
+      return;
+    }
+
+    const W = 640, H = 200, PAD = 32;
+    const x = (dateStr) => PAD + dateFraction(dateStr, sprint.startDate, sprint.endDate) * (W - PAD * 2);
+    const y = (remaining) => PAD + (1 - Math.max(0, Math.min(1, remaining / total))) * (H - PAD * 2);
+
+    const idealPath = 'M ' + x(sprint.startDate) + ' ' + y(total) + ' L ' + x(sprint.endDate) + ' ' + y(0);
+
+    const actualPoints = [{ date: sprint.startDate, remaining: total }]
+      .concat(sprint.burnHistory.slice().sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    const actualPath = actualPoints.map((p, i) => (i === 0 ? 'M ' : 'L ') + x(p.date) + ' ' + y(p.remaining)).join(' ');
+    const dots = actualPoints.map(p =>
+      '<circle cx="' + x(p.date) + '" cy="' + y(p.remaining) + '" r="3" class="burndown-dot" />'
+    ).join('');
+
+    container.innerHTML =
+      '<div class="burndown-header">' +
+        '<span class="burndown-title">Burndown</span>' +
+        '<span class="burndown-unit">' + total + ' ' + unitLabel + ' at start</span>' +
+      '</div>' +
+      '<svg viewBox="0 0 ' + W + ' ' + H + '" class="burndown-svg" preserveAspectRatio="none">' +
+        '<line x1="' + PAD + '" y1="' + (H - PAD) + '" x2="' + (W - PAD) + '" y2="' + (H - PAD) + '" class="burndown-axis" />' +
+        '<line x1="' + PAD + '" y1="' + PAD + '" x2="' + PAD + '" y2="' + (H - PAD) + '" class="burndown-axis" />' +
+        '<path d="' + idealPath + '" class="burndown-ideal" />' +
+        '<path d="' + actualPath + '" class="burndown-actual" />' +
+        dots +
+        '<text x="' + PAD + '" y="' + (H - 10) + '" class="burndown-label">' + formatDeadline(sprint.startDate) + '</text>' +
+        '<text x="' + (W - PAD) + '" y="' + (H - 10) + '" class="burndown-label" text-anchor="end">' + formatDeadline(sprint.endDate) + '</text>' +
+        '<text x="' + (PAD - 8) + '" y="' + (PAD + 4) + '" class="burndown-label" text-anchor="end">' + total + '</text>' +
+        '<text x="' + (PAD - 8) + '" y="' + (H - PAD + 4) + '" class="burndown-label" text-anchor="end">0</text>' +
+      '</svg>';
+  }
 
   // render()'s first call has to happen after every script has loaded (it
   // calls renderProjectToolbar, defined above), so it lives in whichever

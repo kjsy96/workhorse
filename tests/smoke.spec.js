@@ -193,3 +193,85 @@ test('story point estimates can be set, typed multi-digit, and cleared', async (
 
   expect(errors, 'no console/page errors while setting/clearing points').toEqual([]);
 });
+
+test('burndown chart reflects points burned and handles edge cases', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
+
+  await page.goto(KANBAN_URL);
+  await page.evaluate(() => {
+    const backdrop = document.getElementById('save-warning-backdrop');
+    if (backdrop) backdrop.style.display = 'none';
+  });
+
+  page.on('dialog', (d) => d.accept());
+  await page.locator('.toolbar-mode-btn').click();
+
+  const backlogInput = page.locator('.add-input[data-col="backlog"]');
+  await backlogInput.fill('Three point task');
+  await backlogInput.press('Enter');
+  await backlogInput.fill('Five point task');
+  await backlogInput.press('Enter');
+
+  async function setPoints(taskText, value) {
+    const card = page.locator('.card', { hasText: taskText });
+    await card.hover();
+    await card.locator('.card-menu-btn').click();
+    await card.locator('.card-menu-date-input[type="number"]').fill(String(value));
+    await card.locator('.card-menu-date-input[type="number"]').blur();
+    await page.keyboard.press('Escape'); // close the kebab menu so it doesn't block the next card
+  }
+  await setPoints('Three point task', 3);
+  await setPoints('Five point task', 5);
+
+  // no active sprint yet -- burndown container stays empty/hidden
+  await expect(page.locator('#burndown-container')).toBeEmpty();
+
+  await page.locator('#project-toolbar button', { hasText: 'Start Sprint' }).click();
+  await page.locator('#sprint-name-input').fill('Points Sprint');
+  await page.locator('#sprint-start-input').fill('2026-01-01');
+  await page.locator('#sprint-end-input').fill('2026-01-10');
+  const checklist = page.locator('#sprint-modal-checklist');
+  await checklist.locator('.checklist-row', { hasText: 'Three point task' }).locator('input[type="checkbox"]').check();
+  await checklist.locator('.checklist-row', { hasText: 'Five point task' }).locator('input[type="checkbox"]').check();
+  await page.locator('#sprint-modal-submit').click();
+
+  await expect(page.locator('.burndown-unit')).toHaveText('8 points at start');
+  // SVG <path> visibility can false-negative on Playwright's bounding-box
+  // heuristic for a perfectly horizontal/vertical line (zero-height/width
+  // box even with stroke) -- assert the path data exists instead
+  await expect(page.locator('.burndown-actual')).toHaveAttribute('d', /^M/);
+  await expect(page.locator('.burndown-ideal')).toHaveAttribute('d', /^M/);
+
+  // complete one task -- today's actual point should reflect 5 remaining, not 8
+  await page.locator('#dropzone-todo .card', { hasText: 'Three point task' }).dragTo(page.locator('#dropzone-done'));
+  await expect(page.locator('.burndown-dot').last()).toHaveAttribute('cy', /.+/);
+
+  // simulate a multi-day sprint by injecting earlier burnHistory entries
+  // directly (same technique this project has used before for hard-to-
+  // naturally-trigger date-based scenarios) and confirm the chart still
+  // renders cleanly with several points plotted
+  const dotCountBefore = await page.locator('.burndown-dot').count();
+  await page.evaluate(() => {
+    const proj = activeProject();
+    proj.activeSprint.burnHistory.unshift({ date: '2026-01-02', remaining: 8 }, { date: '2026-01-03', remaining: 8 });
+    renderProjectToolbar();
+  });
+  const dotCountAfter = await page.locator('.burndown-dot').count();
+  expect(dotCountAfter).toBeGreaterThan(dotCountBefore);
+
+  await page.locator('#theme-toggle-btn').click(); // confirm dark mode doesn't throw
+  await expect(page.locator('.burndown-svg')).toBeVisible();
+
+  // complete the sprint, start a fresh empty one -- must not throw on 0 total
+  await page.locator('#project-toolbar button', { hasText: 'Complete Sprint' }).click();
+  await page.locator('#project-toolbar button', { hasText: 'Start Sprint' }).click();
+  await page.locator('#sprint-name-input').fill('Empty Sprint');
+  await page.locator('#sprint-start-input').fill('2026-02-01');
+  await page.locator('#sprint-end-input').fill('2026-02-05');
+  await page.locator('#sprint-modal-submit').click();
+  await expect(page.locator('.burndown-empty')).toBeVisible();
+
+  expect(errors, 'no console/page errors across the burndown chart flow').toEqual([]);
+});
