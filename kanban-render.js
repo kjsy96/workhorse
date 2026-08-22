@@ -452,6 +452,40 @@
         });
         dropdown.appendChild(clearDeadlineBtn);
 
+        const pointsDivider = document.createElement('div');
+        pointsDivider.className = 'card-menu-divider';
+        dropdown.appendChild(pointsDivider);
+
+        const pointsRow = document.createElement('div');
+        pointsRow.className = 'card-menu-deadline-row';
+        const pointsLabel = document.createElement('span');
+        pointsLabel.className = 'card-menu-label';
+        pointsLabel.textContent = 'Points';
+        pointsRow.appendChild(pointsLabel);
+        const pointsInput = document.createElement('input');
+        pointsInput.type = 'number';
+        pointsInput.min = '0';
+        pointsInput.className = 'card-menu-date-input';
+        if (item.points != null) pointsInput.value = item.points;
+        pointsInput.addEventListener('click', (e) => e.stopPropagation());
+        pointsInput.addEventListener('mousedown', (e) => e.stopPropagation());
+        pointsRow.appendChild(pointsInput);
+        dropdown.appendChild(pointsRow);
+
+        const clearPointsBtn = document.createElement('button');
+        clearPointsBtn.className = 'card-menu-item';
+        clearPointsBtn.textContent = 'Clear points';
+        clearPointsBtn.style.display = item.points != null ? '' : 'none';
+        clearPointsBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          pushHistory();
+          item.points = null;
+          pointsInput.value = '';
+          refreshPointsUI();
+          save(state);
+        });
+        dropdown.appendChild(clearPointsBtn);
+
         if (state.projects.length > 1) {
           const divider1 = document.createElement('div');
           divider1.className = 'card-menu-divider';
@@ -521,6 +555,11 @@
         deadlineBadge.style.display = 'none';
         dateWrap.appendChild(deadlineBadge);
 
+        const pointsBadge = document.createElement('span');
+        pointsBadge.className = 'card-points';
+        pointsBadge.style.display = 'none';
+        dateWrap.appendChild(pointsBadge);
+
         function refreshDeadlineUI() {
           if (item.deadline) {
             deadlineBadge.style.display = '';
@@ -534,6 +573,18 @@
         }
         refreshDeadlineUI();
 
+        function refreshPointsUI() {
+          if (item.points != null) {
+            pointsBadge.style.display = '';
+            pointsBadge.textContent = item.points + ' pt' + (item.points === 1 ? '' : 's');
+            clearPointsBtn.style.display = '';
+          } else {
+            pointsBadge.style.display = 'none';
+            clearPointsBtn.style.display = 'none';
+          }
+        }
+        refreshPointsUI();
+
         let deadlineHistoryPushed = false;
         deadlineInput.addEventListener('focus', () => {
           deadlineHistoryPushed = false;
@@ -545,6 +596,21 @@
           }
           item.deadline = e.target.value || null;
           refreshDeadlineUI();
+          save(state);
+        });
+
+        let pointsHistoryPushed = false;
+        pointsInput.addEventListener('focus', () => {
+          pointsHistoryPushed = false;
+        });
+        pointsInput.addEventListener('change', (e) => {
+          if (!pointsHistoryPushed) {
+            pushHistory();
+            pointsHistoryPushed = true;
+          }
+          const val = e.target.value;
+          item.points = val === '' ? null : Math.max(0, Math.round(Number(val)));
+          refreshPointsUI();
           save(state);
         });
 
@@ -893,7 +959,7 @@
         if (!text) return;
         const col = input.dataset.col;
         pushHistory();
-        activeProject()[col].push({ id: uid(), text: text, created: Date.now(), deadline: null });
+        activeProject()[col].push({ id: uid(), text: text, created: Date.now(), deadline: null, points: null });
         save(state);
         input.value = '';
         input.style.height = 'auto';

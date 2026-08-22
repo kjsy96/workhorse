@@ -146,3 +146,50 @@ test('starting and completing a sprint moves items and records history', async (
 
   expect(errors, 'no console/page errors across the sprint start/complete flow').toEqual([]);
 });
+
+test('story point estimates can be set, typed multi-digit, and cleared', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
+
+  await page.goto(KANBAN_URL);
+  await page.evaluate(() => {
+    const backdrop = document.getElementById('save-warning-backdrop');
+    if (backdrop) backdrop.style.display = 'none';
+  });
+
+  const input = page.locator('.add-input[data-col="todo"]');
+  await input.fill('Task with an estimate');
+  await input.press('Enter');
+  await input.fill('Task with no estimate');
+  await input.press('Enter');
+
+  const card = page.locator('.card', { hasText: 'Task with an estimate' });
+  await card.hover();
+  await card.locator('.card-menu-btn').click();
+  const pointsInput = card.locator('.card-menu-date-input[type="number"]');
+
+  // type digit-by-digit (not .fill()) to catch the historical "render() on
+  // every keystroke steals focus" bug class this pattern exists to avoid
+  await pointsInput.pressSequentially('13');
+  await expect(pointsInput).toHaveValue('13');
+  await pointsInput.blur();
+
+  await expect(card.locator('.card-points')).toHaveText('13 pts');
+
+  const unpointedCard = page.locator('.card', { hasText: 'Task with no estimate' });
+  await expect(unpointedCard.locator('.card-points')).toBeHidden();
+
+  // undo the points edit, then clear via the menu button
+  await page.locator('#undo-btn').click();
+  await expect(card.locator('.card-points')).toBeHidden();
+  await page.locator('#redo-btn').click();
+  await expect(card.locator('.card-points')).toHaveText('13 pts');
+
+  await card.hover();
+  await card.locator('.card-menu-btn').click();
+  await card.locator('.card-menu-item', { hasText: 'Clear points' }).click();
+  await expect(card.locator('.card-points')).toBeHidden();
+
+  expect(errors, 'no console/page errors while setting/clearing points').toEqual([]);
+});

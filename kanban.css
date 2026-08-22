@@ -902,6 +902,16 @@
     background: var(--danger-bg);
   }
 
+  .card-points {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    color: var(--ink-soft);
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 2px 8px;
+  }
+
   .card-list-view {
     font-size: 14.5px;
     line-height: 1.5;
