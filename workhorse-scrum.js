@@ -308,7 +308,7 @@
 
   // render()'s first call has to happen after every script has loaded (it
   // calls renderProjectToolbar, defined above), so it lives in whichever
-  // file loads last rather than in kanban-render.js itself.
+  // file loads last rather than in workhorse-render.js itself.
   render();
   updateSaveFileStatus();
   initFileConnection().catch(err => console.error('File connection init failed', err));

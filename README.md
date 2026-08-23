@@ -1,14 +1,16 @@
-# Kanban Board
+# Workhorse
 
-A single-file, zero-dependency kanban board — drag-and-drop tasks across To Do / In Progress / Done, organized into multiple named projects, with real autosave to a file on disk.
+A zero-dependency task and project management tool — drag-and-drop Kanban boards, or switch any project to a sprint-based Scrum workflow with a backlog, sprints, and a burndown chart. Organized into multiple named projects, each independently Kanban or Scrum, with real autosave to a file on disk.
 
-This started as a hands-on project for building fluency with Claude: the first several versions were built conversationally in the Claude.ai chat interface, then the project moved to Claude Code once it needed real version control, a proper git workflow, and more structured, file-aware development. The commit history and `CLAUDE.md` in this repo reflect that transition — `CLAUDE.md` is the handoff document written for Claude Code itself, capturing the bugs, architecture decisions, and conventions from the chat-based sessions so that context wasn't lost when switching tools.
+This started as a hands-on project for building fluency with Claude: the first several versions were built conversationally in the Claude.ai chat interface, then the project moved to Claude Code once it needed real version control, a proper git workflow, and more structured, file-aware development. The commit history and `CLAUDE.md` in this repo reflect that transition — `CLAUDE.md` is the handoff document written for Claude Code itself, capturing the bugs, architecture decisions, and conventions from the chat-based sessions so that context wasn't lost when switching tools. It was called "Kanban Board" through v1.4 before being renamed to reflect the broader Scrum support.
 
-Open `kanban.html` in Chrome or Edge — no install, no build step, no server. Load `kanban-example-data.json` from the app's save-file menu to try it out with sample data.
+Open `workhorse.html` in Chrome or Edge — no install, no build step, no server (it's split across a handful of plain files — `workhorse.css`, `workhorse-core.js`, `workhorse-render.js`, `workhorse-scrum.js` — but still opens by double-clicking, no bundler involved). Load `workhorse-example-data.json` from the app's save-file menu to try it out with sample data.
 
 ## Features
 
-- **Multi-project boards** — switch between separate named projects via tabs, each with its own To Do / In Progress / Done columns
+- **Kanban or Scrum, per project** — each project independently runs a continuous Kanban board or a sprint-based Scrum workflow, side by side, sharing the same save file
+- **Scrum mode** — a Backlog feeding sprints with their own To Do / In Progress / Review / Done columns, optional story point estimates, and a burndown chart plotting remaining work against an ideal pace line
+- **Multi-project boards** — switch between separate named projects via tabs, each with its own columns
 - **Deadlines** — optional due dates per task, with a badge that turns red when overdue
 - **Inline bullets and checkboxes** — lightweight markdown-style syntax (`* item`, `[] item`, `[x] item`) parsed and rendered live, no separate "formatting mode" required
 - **Undo/redo** — full history stack with keyboard shortcuts, that correctly ignores native text-field undo so you don't fight the browser while typing
@@ -40,4 +42,4 @@ Chrome and Edge only. The autosave-to-disk feature depends on the File System Ac
 
 ## Versioning
 
-Early on, each meaningful change shipped as a new versioned file (`kanban-v1.0.html`, `kanban-v1.1.html`, `kanban-v1.2.html`, …) rather than being edited in place — those are preserved as-is in `Archive/`. Once this project moved to git, that scheme was replaced with normal git tags and commits against a single `kanban.html`, which is what version control is for. See the [Releases](../../releases) page for what changed in each version.
+Early on, each meaningful change shipped as a new versioned file (`kanban-v1.0.html`, `kanban-v1.1.html`, `kanban-v1.2.html`, …) rather than being edited in place — those are preserved as-is in `Archive/` under their original names. Once this project moved to git, that scheme was replaced with normal git tags and commits against the live app files (`workhorse.html` and friends, edited in place), which is what version control is for. See the [Releases](../../releases) page for what changed in each version.

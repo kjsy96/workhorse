@@ -3,7 +3,7 @@ const { test, expect } = require('@playwright/test');
 const path = require('path');
 const url = require('url');
 
-const KANBAN_URL = url.pathToFileURL(path.resolve(__dirname, '../kanban.html')).href;
+const APP_URL = url.pathToFileURL(path.resolve(__dirname, '../workhorse.html')).href;
 
 test('loads with no console/page errors and the board renders', async ({ page }) => {
   const errors = [];
@@ -12,7 +12,7 @@ test('loads with no console/page errors and the board renders', async ({ page })
     if (msg.type() === 'error') errors.push(msg.text());
   });
 
-  await page.goto(KANBAN_URL);
+  await page.goto(APP_URL);
 
   await expect(page.locator('.version-badge')).toBeVisible();
   await expect(page.locator('.column[data-col="todo"]')).toBeVisible();
@@ -29,7 +29,7 @@ test('adding a task updates the column', async ({ page }) => {
     if (msg.type() === 'error') errors.push(msg.text());
   });
 
-  await page.goto(KANBAN_URL);
+  await page.goto(APP_URL);
 
   // A fresh browser context has no save file connected, so the persistent
   // save-warning modal covers the board by design (see CLAUDE.md) -- hide it
@@ -55,7 +55,7 @@ test('switching a project to Scrum mode reveals Backlog/Review and moves existin
   page.on('pageerror', (err) => errors.push(err.message));
   page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
 
-  await page.goto(KANBAN_URL);
+  await page.goto(APP_URL);
   await page.evaluate(() => {
     const backdrop = document.getElementById('save-warning-backdrop');
     if (backdrop) backdrop.style.display = 'none';
@@ -93,7 +93,7 @@ test('starting and completing a sprint moves items and records history', async (
   page.on('pageerror', (err) => errors.push(err.message));
   page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
 
-  await page.goto(KANBAN_URL);
+  await page.goto(APP_URL);
   await page.evaluate(() => {
     const backdrop = document.getElementById('save-warning-backdrop');
     if (backdrop) backdrop.style.display = 'none';
@@ -152,7 +152,7 @@ test('story point estimates can be set, typed multi-digit, and cleared', async (
   page.on('pageerror', (err) => errors.push(err.message));
   page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
 
-  await page.goto(KANBAN_URL);
+  await page.goto(APP_URL);
   await page.evaluate(() => {
     const backdrop = document.getElementById('save-warning-backdrop');
     if (backdrop) backdrop.style.display = 'none';
@@ -199,7 +199,7 @@ test('burndown chart reflects points burned and handles edge cases', async ({ pa
   page.on('pageerror', (err) => errors.push(err.message));
   page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
 
-  await page.goto(KANBAN_URL);
+  await page.goto(APP_URL);
   await page.evaluate(() => {
     const backdrop = document.getElementById('save-warning-backdrop');
     if (backdrop) backdrop.style.display = 'none';

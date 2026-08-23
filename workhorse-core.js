@@ -59,8 +59,8 @@
     return parsed;
   }
 
-  // Returns a parsed+migrated state object if `text` looks like valid kanban
-  // board data, or null if it doesn't. Never throws.
+  // Returns a parsed+migrated state object if `text` looks like valid board
+  // data, or null if it doesn't. Never throws.
   function parseStateFromText(text) {
     if (!text || !text.trim()) return null;
     let parsed;
@@ -276,7 +276,7 @@
     if (!supportsFS) return;
     try {
       const [handle] = await window.showOpenFilePicker({
-        types: [{ description: 'Kanban save file', accept: { 'application/json': ['.json'] } }],
+        types: [{ description: 'Workhorse save file', accept: { 'application/json': ['.json'] } }],
         multiple: false
       });
 
@@ -297,7 +297,7 @@
       if (ok) {
         await storeHandle(handle);
       } else {
-        alert('That file doesn\u2019t look like a kanban save file, or its contents couldn\u2019t be read. Nothing was changed \u2014 your board and that file are both untouched.');
+        alert('That file doesn\u2019t look like a Workhorse save file, or its contents couldn\u2019t be read. Nothing was changed \u2014 your board and that file are both untouched.');
       }
       updateSaveFileStatus();
     } catch (e) {
@@ -311,8 +311,8 @@
     if (!supportsFS) return;
     try {
       const handle = await window.showSaveFilePicker({
-        suggestedName: 'kanban-data.json',
-        types: [{ description: 'Kanban save file', accept: { 'application/json': ['.json'] } }]
+        suggestedName: 'workhorse-data.json',
+        types: [{ description: 'Workhorse save file', accept: { 'application/json': ['.json'] } }]
       });
 
       try {

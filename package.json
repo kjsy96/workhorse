@@ -1,7 +1,7 @@
 {
-  "name": "kanban-board-ci",
+  "name": "workhorse-ci",
   "private": true,
-  "description": "CI tooling only. kanban.html itself is a zero-build-step, dependency-free single file and does not need anything in here to run.",
+  "description": "CI tooling only. workhorse.html itself is a zero-build-step, dependency-free app and does not need anything in here to run.",
   "scripts": {
     "test": "playwright test"
   },
