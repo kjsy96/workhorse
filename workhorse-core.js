@@ -1,4 +1,4 @@
-  const APP_VERSION = 'v1.4';
+  const APP_VERSION = 'v1.5';
   const STORAGE_KEY = 'kanban-personal-board-v1';
   const THEME_STORAGE_KEY = 'kanban-theme-v1';
   const COLS = ['backlog', 'todo', 'doing', 'review', 'done'];
@@ -12,6 +12,15 @@
 
   function uid() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  }
+
+  // Used at migration time (below) as well as by workhorse-render.js/
+  // workhorse-scrum.js -- lives here, not workhorse-scrum.js, since
+  // migrateState() needs it synchronously at load(), before
+  // workhorse-scrum.js has even been requested by the browser.
+  function todayDateStr() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
 
   function makeProject(name) {
@@ -63,7 +72,6 @@
         p.activeSprint.doing = p.doing || [];
         p.activeSprint.review = p.review || [];
         p.activeSprint.done = p.done || [];
-        if (!Array.isArray(p.activeSprint.burnHistory)) p.activeSprint.burnHistory = [];
         p.todo = [];
         p.doing = [];
         p.done = [];
@@ -71,6 +79,48 @@
       // `review` only ever exists nested under activeSprint now -- Kanban
       // never had it, and Scrum's lives on the sprint, not the project.
       if (p.review !== undefined) delete p.review;
+
+      // Pre-completion-date-tracking (issue #21 PR3) shape: items already
+      // sitting in an active sprint's Done column have no completedAt, which
+      // would make the burndown chart (recomputed from completedAt on every
+      // render, no stored history) wrongly treat them as still-remaining
+      // forever. We don't have their real historical completion date -- the
+      // old chart only tracked daily aggregate totals, not per-item dates --
+      // so backfill with today as the best available information, matching
+      // this project's "additive, never destructive, best-effort when exact
+      // history is unrecoverable" migration philosophy used throughout.
+      if (p.activeSprint && Array.isArray(p.activeSprint.done)) {
+        p.activeSprint.done.forEach(item => {
+          if (!item.completedAt) item.completedAt = todayDateStr();
+        });
+      }
+
+      // Pre-pool-separation (original v1.4) archived sprints stored their
+      // finished items in `completedItems`, and had no nested todo/doing/
+      // review at all (those lived on the project directly, not the sprint,
+      // at the time a sprint was archived). The sprint-history detail view
+      // reads `done` unconditionally -- without this, expanding an old
+      // archived sprint throws mid-render, which (since renderProjectToolbar
+      // has no try/catch) skips the rest of that render pass entirely,
+      // including renderBoard() -- so this single gap was the real cause
+      // behind "past sprint disappears on click" AND "a freshly-started
+      // sprint's tasks don't appear in To do" (the latter only once the
+      // ephemeral expanded-state was left pointing at the broken sprint from
+      // an earlier click in the same session).
+      if (Array.isArray(p.sprints)) {
+        p.sprints.forEach(s => {
+          if (!Array.isArray(s.done)) {
+            s.done = Array.isArray(s.completedItems) ? s.completedItems : [];
+            delete s.completedItems;
+          }
+          if (!Array.isArray(s.todo)) s.todo = [];
+          if (!Array.isArray(s.doing)) s.doing = [];
+          if (!Array.isArray(s.review)) s.review = [];
+          s.done.forEach(item => {
+            if (!item.completedAt) item.completedAt = todayDateStr();
+          });
+        });
+      }
     });
     if (!parsed.activeProjectId || !parsed.projects.some(p => p.id === parsed.activeProjectId)) {
       parsed.activeProjectId = parsed.projects[0].id;

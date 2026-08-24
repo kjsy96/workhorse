@@ -1,6 +1,3 @@
-  let expandedSprintHistory = new Set();
-  let expandedSprintDetail = new Set(); // keyed by sprint.id, unique across the app
-
   function renderProjectToolbar() {
     const proj = activeProject();
     const toolbar = document.getElementById('project-toolbar');
@@ -68,7 +65,6 @@
       deleteBtn.addEventListener('click', () => deleteSprint(proj));
       toolbar.appendChild(deleteBtn);
 
-      upsertTodayBurndownPoint(proj);
       renderBurndownChart(burndownContainer, proj.activeSprint);
     } else {
       const startBtn = document.createElement('button');
@@ -79,59 +75,214 @@
     }
 
     if (proj.sprints.length) {
-      if (!expandedSprintHistory.has(proj.id)) {
-        const stack = document.createElement('div');
-        stack.className = 'done-stack sprint-history-stack';
-        stack.textContent = proj.sprints.length + ' past sprint' + (proj.sprints.length === 1 ? '' : 's');
-        stack.addEventListener('click', () => {
-          expandedSprintHistory.add(proj.id);
-          renderProjectToolbar();
-        });
-        toolbar.appendChild(stack);
-      } else {
-        const list = document.createElement('div');
-        list.className = 'sprint-history-list';
-        proj.sprints.slice().reverse().forEach(s => {
-          const row = document.createElement('div');
-          row.className = 'sprint-history-row';
-          row.textContent = s.name + ' (' + formatDeadline(s.startDate) + '–' + formatDeadline(s.endDate) + ')' + (s.goal ? ' — ' + s.goal : '');
-          row.addEventListener('click', () => {
-            if (expandedSprintDetail.has(s.id)) expandedSprintDetail.delete(s.id);
-            else expandedSprintDetail.add(s.id);
-            renderProjectToolbar();
-          });
-          list.appendChild(row);
-
-          if (expandedSprintDetail.has(s.id)) {
-            const detail = document.createElement('div');
-            detail.className = 'sprint-history-detail';
-            if (!s.done.length) {
-              const empty = document.createElement('div');
-              empty.className = 'sprint-history-detail-empty';
-              empty.textContent = 'Nothing was completed in this sprint.';
-              detail.appendChild(empty);
-            } else {
-              s.done.forEach(item => {
-                const line = document.createElement('div');
-                line.className = 'sprint-history-detail-item';
-                line.textContent = item.text.split('\n')[0].slice(0, 100);
-                detail.appendChild(line);
-              });
-            }
-            list.appendChild(detail);
-          }
-        });
-        const collapseBtn = document.createElement('button');
-        collapseBtn.className = 'done-stack-collapse';
-        collapseBtn.textContent = 'Show less';
-        collapseBtn.addEventListener('click', () => {
-          expandedSprintHistory.delete(proj.id);
-          renderProjectToolbar();
-        });
-        list.appendChild(collapseBtn);
-        toolbar.appendChild(list);
-      }
+      const historyBtn = document.createElement('button');
+      historyBtn.className = 'save-status-btn';
+      historyBtn.textContent = proj.sprints.length + ' past sprint' + (proj.sprints.length === 1 ? '' : 's');
+      historyBtn.addEventListener('click', () => openSprintHistoryModal(proj));
+      toolbar.appendChild(historyBtn);
     }
+  }
+
+  // Past sprints render in a modal rather than inline in the toolbar --
+  // inline worked fine for one or two, but every sprint ever completed
+  // would otherwise permanently push the board further down the page.
+  // Selecting a row isolates that one sprint in a second modal on top of
+  // this one, rather than expanding inline, so a long history list stays
+  // scannable instead of growing a detail block per row you've looked at.
+  function renderSprintHistoryModalBody(proj) {
+    const body = document.getElementById('sprint-history-modal-body');
+    body.innerHTML = '';
+    if (!proj.sprints.length) {
+      const empty = document.createElement('div');
+      empty.className = 'sprint-history-detail-empty';
+      empty.textContent = 'No past sprints.';
+      body.appendChild(empty);
+      return;
+    }
+    proj.sprints.slice().reverse().forEach(s => {
+      const row = document.createElement('div');
+      row.className = 'sprint-history-row';
+      row.textContent = s.name + ' (' + formatDeadline(s.startDate) + '–' + formatDeadline(s.endDate) + ')' + (s.goal ? ' — ' + s.goal : '');
+      row.addEventListener('click', () => openSprintDetailModal(proj, s));
+      body.appendChild(row);
+    });
+  }
+
+  function openSprintHistoryModal(proj) {
+    renderSprintHistoryModalBody(proj);
+    document.getElementById('sprint-history-modal-backdrop').style.display = 'flex';
+  }
+
+  function closeSprintHistoryModal() {
+    document.getElementById('sprint-history-modal-backdrop').style.display = 'none';
+    closeSprintDetailModal(); // defensive -- shouldn't be reachable while open, but never leave it orphaned
+  }
+
+  document.getElementById('sprint-history-modal-close').addEventListener('click', closeSprintHistoryModal);
+  document.getElementById('sprint-history-modal-backdrop').addEventListener('click', (e) => {
+    if (e.target.id === 'sprint-history-modal-backdrop') closeSprintHistoryModal();
+  });
+
+  // One isolated sprint's full detail -- opened from a row in the list
+  // modal above, layered on top of it (higher z-index backdrop) rather than
+  // replacing it, so closing this one returns to the list still open.
+  function openSprintDetailModal(proj, sprint) {
+    document.getElementById('sprint-detail-modal-title').textContent = sprint.name;
+    document.getElementById('sprint-detail-modal-meta').textContent =
+      formatDeadline(sprint.startDate) + '–' + formatDeadline(sprint.endDate) + (sprint.goal ? ' — ' + sprint.goal : '');
+
+    const body = document.getElementById('sprint-detail-modal-body');
+    body.innerHTML = '';
+    if (!sprint.done.length) {
+      const empty = document.createElement('div');
+      empty.className = 'sprint-history-detail-empty';
+      empty.textContent = 'Nothing was completed in this sprint.';
+      body.appendChild(empty);
+    } else {
+      sprint.done.forEach(item => {
+        const line = document.createElement('div');
+        line.className = 'sprint-history-detail-item';
+        const textSpan = document.createElement('span');
+        textSpan.textContent = item.text.split('\n')[0].slice(0, 100);
+        line.appendChild(textSpan);
+        if (item.completedAt) {
+          const dateSpan = document.createElement('span');
+          dateSpan.className = 'sprint-history-detail-date';
+          dateSpan.textContent = formatDeadline(item.completedAt);
+          line.appendChild(dateSpan);
+        }
+        body.appendChild(line);
+      });
+    }
+
+    const actions = document.getElementById('sprint-detail-modal-actions');
+    actions.innerHTML = '';
+
+    const reopenBtn = document.createElement('button');
+    reopenBtn.className = 'save-status-btn';
+    reopenBtn.textContent = 'Reopen Sprint';
+    reopenBtn.title = 'Make this the active sprint again';
+    reopenBtn.addEventListener('click', () => reopenSprint(proj, sprint));
+    actions.appendChild(reopenBtn);
+
+    // Single Delete button revealing a drop-UP menu (this button sits in the
+    // modal's bottom footer, so a dropdown opening downward would spill past
+    // the modal's own edge) for the two outcomes -- a plain confirm() can't
+    // offer a 3-way choice, so which one fires is decided by which menu item
+    // was clicked instead.
+    const deleteWrap = document.createElement('div');
+    deleteWrap.className = 'sprint-detail-delete-menu';
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'save-status-btn';
+    deleteBtn.textContent = 'Delete';
+    deleteWrap.appendChild(deleteBtn);
+
+    const deleteDropdown = document.createElement('div');
+    deleteDropdown.className = 'sprint-detail-delete-dropdown';
+
+    const keepItem = document.createElement('button');
+    keepItem.className = 'save-menu-item';
+    keepItem.textContent = 'Delete (Keep Tasks)';
+    keepItem.title = 'Remove this sprint from history; its completed tasks return to the Backlog';
+    keepItem.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteDropdown.classList.remove('open');
+      deleteArchivedSprint(proj, sprint, true);
+    });
+    deleteDropdown.appendChild(keepItem);
+
+    const wipeItem = document.createElement('button');
+    wipeItem.className = 'save-menu-item';
+    wipeItem.textContent = 'Delete (Remove Tasks)';
+    wipeItem.title = 'Remove this sprint and its completed tasks entirely';
+    wipeItem.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteDropdown.classList.remove('open');
+      deleteArchivedSprint(proj, sprint, false);
+    });
+    deleteDropdown.appendChild(wipeItem);
+
+    deleteBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteDropdown.classList.toggle('open');
+    });
+
+    deleteWrap.appendChild(deleteDropdown);
+    actions.appendChild(deleteWrap);
+
+    document.getElementById('sprint-detail-modal-backdrop').style.display = 'flex';
+  }
+
+  function closeSprintDetailModal() {
+    document.getElementById('sprint-detail-modal-backdrop').style.display = 'none';
+  }
+
+  document.getElementById('sprint-detail-modal-close').addEventListener('click', closeSprintDetailModal);
+  document.getElementById('sprint-detail-modal-backdrop').addEventListener('click', (e) => {
+    if (e.target.id === 'sprint-detail-modal-backdrop') closeSprintDetailModal();
+  });
+
+  // The delete dropdown is rebuilt fresh every time the detail modal opens
+  // (see openSprintDetailModal above), so there's at most one on screen at
+  // a time -- just look for whichever is currently open rather than needing
+  // a reference captured at creation time.
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('.sprint-detail-delete-menu')) return;
+    const openDropdown = document.querySelector('.sprint-detail-delete-dropdown.open');
+    if (openDropdown) openDropdown.classList.remove('open');
+  });
+
+  // Un-completes a past sprint, making it the active sprint again. Blocked
+  // outright if a different sprint is already active -- rather than
+  // silently completing or discarding that other sprint's in-progress work
+  // to make room, which would be a surprising side effect of an unrelated
+  // click, this just explains the conflict and leaves both sprints alone
+  // until the user resolves it themselves (mirrors how "Start Sprint"
+  // itself is already unavailable while a sprint is active).
+  function reopenSprint(proj, sprint) {
+    if (proj.activeSprint) {
+      alert('Finish or delete your current sprint, "' + proj.activeSprint.name + '," before reopening this one.');
+      return;
+    }
+    const confirmed = confirm('Reopen "' + sprint.name + '"? It will become your active sprint again. You can undo this with Ctrl+Z.');
+    if (!confirmed) return;
+    pushHistory();
+    const idx = proj.sprints.findIndex(s => s.id === sprint.id);
+    if (idx === -1) return;
+    proj.sprints.splice(idx, 1);
+    delete sprint.completedAt; // sprint-level archive timestamp -- matches a freshly-started sprint's shape
+    proj.activeSprint = sprint;
+    save(state);
+    closeSprintDetailModal();
+    closeSprintHistoryModal();
+    render();
+  }
+
+  // Removes a sprint from history permanently. `returnTasksToBacklog`
+  // chooses between the sprint's completed tasks coming back to Backlog
+  // (recoverable, just not credited to any sprint anymore) or being deleted
+  // along with it -- asked up front via which button was clicked, rather
+  // than a single confirm() that can't express a 3-way choice.
+  function deleteArchivedSprint(proj, sprint, returnTasksToBacklog) {
+    const count = sprint.done.length;
+    const taskWord = count === 1 ? 'task' : 'tasks';
+    const confirmed = returnTasksToBacklog
+      ? confirm('Delete "' + sprint.name + '" from history? Its ' + count + ' completed ' + taskWord + ' will be moved to the Backlog. You can undo this with Ctrl+Z.')
+      : confirm('Delete "' + sprint.name + '" and its ' + count + ' completed ' + taskWord + '? They will NOT be moved to the Backlog. You can undo this with Ctrl+Z.');
+    if (!confirmed) return;
+    pushHistory();
+    const idx = proj.sprints.findIndex(s => s.id === sprint.id);
+    if (idx === -1) return;
+    proj.sprints.splice(idx, 1);
+    if (returnTasksToBacklog) {
+      sprint.done.forEach(item => { item.completedAt = null; }); // no longer meaningful once back in Backlog
+      proj.backlog.push(...sprint.done);
+    }
+    save(state);
+    closeSprintDetailModal();
+    renderSprintHistoryModalBody(proj); // list modal stays open, refreshed to drop the deleted row
+    render();
   }
 
   // Kanban and Scrum are separate, simultaneously-persistent pools (see
@@ -162,7 +313,7 @@
     proj.activeSprint = {
       id: uid(), name: meta.name, goal: meta.goal,
       startDate: meta.startDate, endDate: meta.endDate,
-      unit: unit, startingTotal: startingTotal, burnHistory: [],
+      unit: unit, startingTotal: startingTotal,
       todo: [], doing: [], review: [], done: []
     };
     proj.activeSprint.todo.push(...selected);
@@ -203,6 +354,12 @@
     if (!confirmed) return;
     pushHistory();
     const sprint = proj.activeSprint;
+    // Done items carry a completedAt (see workhorse-render.js's
+    // syncCompletedAt) that's only meaningful while they sit in a sprint's
+    // Done column -- clear it here too, or a stale date could ride along
+    // into Backlog and silently make a *future* sprint's burndown treat it
+    // as already-old-news the moment it's picked up again.
+    sprint.done.forEach(item => { item.completedAt = null; });
     proj.backlog.push(...sprint.todo, ...sprint.doing, ...sprint.review, ...sprint.done);
     proj.activeSprint = null;
     save(state);
@@ -299,46 +456,62 @@
     if (e.target.id === 'sprint-modal-backdrop') closeStartSprintModal();
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeStartSprintModal();
+    if (e.key !== 'Escape') return;
+    // Close one layer at a time -- with the detail modal stacked on top of
+    // the list modal, Escape should back out a step, not drop both at once.
+    if (document.getElementById('sprint-detail-modal-backdrop').style.display === 'flex') {
+      closeSprintDetailModal();
+    } else if (document.getElementById('sprint-history-modal-backdrop').style.display === 'flex') {
+      closeSprintHistoryModal();
+    } else {
+      closeStartSprintModal();
+    }
   });
 
-  function todayDateStr() {
-    const d = new Date();
-    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  function dateToDayNum(dateStr) {
+    const parts = dateStr.split('-').map(Number);
+    return Date.UTC(parts[0], parts[1] - 1, parts[2]) / 86400000;
   }
 
-  function sprintRemaining(proj, sprint) {
-    const active = sprint.todo.concat(sprint.doing, sprint.review);
+  function dayNumToDateStr(dayNum) {
+    const d = new Date(dayNum * 86400000);
+    return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0');
+  }
+
+  // Every day from startDateStr to endDateStr inclusive. Returns just
+  // [startDateStr] if endDateStr falls before it, rather than an empty range
+  // -- keeps the chart showing at least the sprint's starting point instead
+  // of nothing.
+  function dateRange(startDateStr, endDateStr) {
+    const start = dateToDayNum(startDateStr);
+    const end = Math.max(start, dateToDayNum(endDateStr));
+    const days = [];
+    for (let d = start; d <= end; d++) days.push(dayNumToDateStr(d));
+    return days;
+  }
+
+  // Recomputes "remaining" as of a given day directly from each item's
+  // completedAt -- no stored per-day history needed. An item counts as
+  // remaining on a day if it hadn't been completed by then (completedAt is
+  // null, or falls after that day), so editing/backdating a completion date
+  // just shifts which day it drops out of the sum and nothing else needs to
+  // change. String comparison is safe here since dates are zero-padded
+  // 'YYYY-MM-DD'.
+  function remainingAsOf(sprint, dayStr) {
+    const pending = sprint.todo.concat(sprint.doing, sprint.review, sprint.done)
+      .filter(i => !i.completedAt || i.completedAt > dayStr);
     return sprint.unit === 'points'
-      ? active.reduce((sum, i) => sum + (i.points || 0), 0)
-      : active.length;
-  }
-
-  function upsertTodayBurndownPoint(proj) {
-    const sprint = proj.activeSprint;
-    const remaining = sprintRemaining(proj, sprint);
-    const today = todayDateStr();
-    const existing = sprint.burnHistory.find(p => p.date === today);
-    if (existing) {
-      if (existing.remaining === remaining) return;
-      existing.remaining = remaining;
-    } else {
-      sprint.burnHistory.push({ date: today, remaining: remaining });
-    }
-    save(state);
+      ? pending.reduce((sum, i) => sum + (i.points || 0), 0)
+      : pending.length;
   }
 
   // Normalizes any date to its 0..1 position between a sprint's start/end,
-  // clamped -- so a burn-history entry from outside the sprint's own date
-  // range (edge case, but possible if dates get edited or a snapshot is old)
-  // still plots at a valid, on-chart position instead of producing NaN/
-  // off-chart SVG coordinates.
+  // clamped -- so a plotted point from outside the sprint's own date range
+  // (edge case, but possible if dates get edited after the fact) still lands
+  // at a valid, on-chart position instead of producing NaN/off-chart SVG
+  // coordinates.
   function dateFraction(dateStr, startDate, endDate) {
-    const toDays = (s) => {
-      const parts = s.split('-').map(Number);
-      return Date.UTC(parts[0], parts[1] - 1, parts[2]) / 86400000;
-    };
-    const start = toDays(startDate), end = toDays(endDate), cur = toDays(dateStr);
+    const start = dateToDayNum(startDate), end = dateToDayNum(endDate), cur = dateToDayNum(dateStr);
     if (end <= start) return 0;
     return Math.max(0, Math.min(1, (cur - start) / (end - start)));
   }
@@ -359,8 +532,13 @@
 
     const idealPath = 'M ' + x(sprint.startDate) + ' ' + y(total) + ' L ' + x(sprint.endDate) + ' ' + y(0);
 
-    const actualPoints = [{ date: sprint.startDate, remaining: total }]
-      .concat(sprint.burnHistory.slice().sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    // One point per day from the sprint's start through today (or its end
+    // date, if that's already passed) -- fully recomputed on every render,
+    // so there's no stored history to keep in sync as completedAt changes.
+    const today = todayDateStr();
+    const chartEnd = today < sprint.endDate ? today : sprint.endDate;
+    const actualPoints = dateRange(sprint.startDate, chartEnd)
+      .map(day => ({ date: day, remaining: remainingAsOf(sprint, day) }));
     const actualPath = actualPoints.map((p, i) => (i === 0 ? 'M ' : 'L ') + x(p.date) + ' ' + y(p.remaining)).join(' ');
     const dots = actualPoints.map(p =>
       '<circle cx="' + x(p.date) + '" cy="' + y(p.remaining) + '" r="3" class="burndown-dot" />'

@@ -151,8 +151,11 @@ test('starting and completing a sprint moves items and records history', async (
   await expect(page.locator('[data-count="review"]')).toHaveText('0');
   await expect(page.locator('[data-count="backlog"]')).toHaveText('2'); // unfinished task returned
 
-  await page.locator('.sprint-history-stack').click();
+  await page.locator('#project-toolbar button', { hasText: 'past sprint' }).click();
+  await expect(page.locator('#sprint-history-modal-backdrop')).toBeVisible();
   await expect(page.locator('.sprint-history-row')).toContainText('Sprint 1');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#sprint-history-modal-backdrop')).toBeHidden();
 
   // reload and confirm the sprint history and view both persisted (localStorage)
   await page.reload();
@@ -209,7 +212,7 @@ test('story point estimates can be set, typed multi-digit, and cleared', async (
   expect(errors, 'no console/page errors while setting/clearing points').toEqual([]);
 });
 
-test('burndown chart reflects points burned and handles edge cases', async ({ page }) => {
+test('burndown chart derives from completion dates: leaving Done un-completes an item, and backdating shifts the chart', async ({ page }) => {
   const errors = [];
   page.on('pageerror', (err) => errors.push(err.message));
   page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
@@ -245,8 +248,8 @@ test('burndown chart reflects points burned and handles edge cases', async ({ pa
 
   await page.locator('#project-toolbar button', { hasText: 'Start Sprint' }).click();
   await page.locator('#sprint-name-input').fill('Points Sprint');
-  await page.locator('#sprint-start-input').fill('2026-01-01');
-  await page.locator('#sprint-end-input').fill('2026-01-10');
+  await page.locator('#sprint-start-input').fill('2026-08-20');
+  await page.locator('#sprint-end-input').fill('2026-09-03');
   const checklist = page.locator('#sprint-modal-checklist');
   await checklist.locator('.checklist-row', { hasText: 'Three point task' }).locator('input[type="checkbox"]').check();
   await checklist.locator('.checklist-row', { hasText: 'Five point task' }).locator('input[type="checkbox"]').check();
@@ -259,22 +262,64 @@ test('burndown chart reflects points burned and handles edge cases', async ({ pa
   await expect(page.locator('.burndown-actual')).toHaveAttribute('d', /^M/);
   await expect(page.locator('.burndown-ideal')).toHaveAttribute('d', /^M/);
 
-  // complete one task -- today's actual point should reflect 5 remaining, not 8
-  await page.locator('#dropzone-todo .card', { hasText: 'Three point task' }).dragTo(page.locator('#dropzone-done'));
-  await expect(page.locator('.burndown-dot').last()).toHaveAttribute('cy', /.+/);
+  const today = await page.evaluate(() => todayDateStr());
+  let remainingToday = await page.evaluate(() => remainingAsOf(activeProject().activeSprint, todayDateStr()));
+  expect(remainingToday).toBe(8); // baseline -- nothing done yet
 
-  // simulate a multi-day sprint by injecting earlier burnHistory entries
-  // directly (same technique this project has used before for hard-to-
-  // naturally-trigger date-based scenarios) and confirm the chart still
-  // renders cleanly with several points plotted
-  const dotCountBefore = await page.locator('.burndown-dot').count();
-  await page.evaluate(() => {
-    const proj = activeProject();
-    proj.activeSprint.burnHistory.unshift({ date: '2026-01-02', remaining: 8 }, { date: '2026-01-03', remaining: 8 });
-    renderProjectToolbar();
-  });
-  const dotCountAfter = await page.locator('.burndown-dot').count();
-  expect(dotCountAfter).toBeGreaterThan(dotCountBefore);
+  // Complete one task -- it should pick up today's date automatically, and
+  // the chart (recomputed from completedAt, not a stored snapshot) should
+  // reflect 5 remaining as of today.
+  await page.locator('#dropzone-todo .card', { hasText: 'Three point task' }).dragTo(page.locator('#dropzone-done'));
+  remainingToday = await page.evaluate(() => remainingAsOf(activeProject().activeSprint, todayDateStr()));
+  expect(remainingToday).toBe(5);
+  let completedAt = await page.evaluate(() =>
+    activeProject().activeSprint.done.find(i => i.text === 'Three point task').completedAt);
+  expect(completedAt).toBe(today);
+
+  // Regression check for the completedAt-clearing fix: dragging a Done task
+  // straight out to Backlog (bypassing To do/In progress/Review) must still
+  // clear its completedAt -- otherwise a stale date could later ride into a
+  // *different* future sprint and make that sprint's chart silently ignore
+  // it. Removing a task that was already Done doesn't change "remaining"
+  // either way (it wasn't counted as remaining before or after), so only
+  // completedAt is asserted here.
+  await page.locator('#dropzone-done .card', { hasText: 'Three point task' }).dragTo(page.locator('#dropzone-backlog'));
+  completedAt = await page.evaluate(() =>
+    activeProject().backlog.find(i => i.text === 'Three point task').completedAt);
+  expect(completedAt).toBeNull();
+
+  // Bring it back and re-complete it, restoring the "5 remaining" state.
+  await page.locator('#dropzone-backlog .card', { hasText: 'Three point task' }).dragTo(page.locator('#dropzone-done'));
+  remainingToday = await page.evaluate(() => remainingAsOf(activeProject().activeSprint, todayDateStr()));
+  expect(remainingToday).toBe(5);
+
+  // Bug report: moving a still-*pending* task out of the sprint (here, Five
+  // point task, straight to Backlog) must reduce "remaining" -- it's no
+  // longer part of the sprint's scope at all, done or not.
+  await page.locator('#dropzone-todo .card', { hasText: 'Five point task' }).dragTo(page.locator('#dropzone-backlog'));
+  remainingToday = await page.evaluate(() => remainingAsOf(activeProject().activeSprint, todayDateStr()));
+  expect(remainingToday).toBe(0); // Three point task is done, Five point task left the sprint entirely
+
+  // Bring it back for the backdating check below.
+  await page.locator('#dropzone-backlog .card', { hasText: 'Five point task' }).dragTo(page.locator('#dropzone-todo'));
+  remainingToday = await page.evaluate(() => remainingAsOf(activeProject().activeSprint, todayDateStr()));
+  expect(remainingToday).toBe(5);
+
+  // Bug report: the user should be able to edit/backdate a completion date
+  // (e.g. they forgot to move the card until later) and have the chart
+  // treat that earlier day as when it actually burned down, not "today."
+  const card = page.locator('.card', { hasText: 'Three point task' });
+  await card.hover();
+  await card.locator('.card-menu-btn').click();
+  const completedInput = card.locator('.card-menu-deadline-row', { hasText: 'Completed on' }).locator('input[type="date"]');
+  await completedInput.fill('2026-08-21');
+  await completedInput.blur();
+  await page.keyboard.press('Escape');
+
+  const remainingOnStartDay = await page.evaluate(() => remainingAsOf(activeProject().activeSprint, '2026-08-20'));
+  const remainingAfterBackdatedDay = await page.evaluate(() => remainingAsOf(activeProject().activeSprint, '2026-08-21'));
+  expect(remainingOnStartDay).toBe(8); // both tasks still pending as of the sprint's first day
+  expect(remainingAfterBackdatedDay).toBe(5); // three-point task burned down as of the backdated day
 
   await page.locator('#theme-toggle-btn').click(); // confirm dark mode doesn't throw
   await expect(page.locator('.burndown-svg')).toBeVisible();
@@ -288,7 +333,104 @@ test('burndown chart reflects points burned and handles edge cases', async ({ pa
   await page.locator('#sprint-modal-submit').click();
   await expect(page.locator('.burndown-empty')).toBeVisible();
 
-  expect(errors, 'no console/page errors across the burndown chart flow').toEqual([]);
+  expect(errors, 'no console/page errors across the burndown/completion-date flow').toEqual([]);
+});
+
+test('a pre-pool-separation archived sprint (completedItems, no nested arrays) migrates safely, its history is viewable, and starting a new sprint afterward still populates To do', async ({ page }) => {
+  const errors = [];
+
+  await page.goto(APP_URL);
+  await page.evaluate(() => {
+    // Exact original-v1.4 archived-sprint shape: Object.assign({}, activeSprint,
+    // { completedAt, completedItems }) -- no todo/doing/review/done nested on
+    // the sprint at all (those lived on the project directly back then).
+    const oldShapeState = {
+      projects: [{
+        id: 'proj1', name: 'Legacy Project', mode: 'scrum',
+        todo: [], doing: [], done: [],
+        backlog: [],
+        activeSprint: null,
+        sprints: [{
+          id: 'old-sprint-1', name: 'Sprint 1', goal: 'The original goal',
+          startDate: '2026-01-01', endDate: '2026-01-14',
+          unit: 'count', startingTotal: 2, burnHistory: [{ date: '2026-01-10', remaining: 1 }],
+          completedAt: Date.now(),
+          completedItems: [
+            { id: 'old1', text: 'Old finished task one', created: Date.now(), deadline: null, points: null },
+            { id: 'old2', text: 'Old finished task two', created: Date.now(), deadline: null, points: null }
+          ]
+        }]
+      }],
+      activeProjectId: 'proj1'
+    };
+    localStorage.setItem('kanban-personal-board-v1', JSON.stringify(oldShapeState));
+  });
+  await page.reload();
+  page.on('pageerror', (err) => errors.push(err.message));
+  page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
+  await page.evaluate(() => {
+    const backdrop = document.getElementById('save-warning-backdrop');
+    if (backdrop) backdrop.style.display = 'none';
+  });
+
+  // Migration should have moved completedItems -> done, backfilled dates,
+  // and given the sprint empty (but present) todo/doing/review arrays.
+  const migrated = await page.evaluate(() => {
+    const s = activeProject().sprints[0];
+    return {
+      hasCompletedItems: 'completedItems' in s,
+      doneLen: s.done.length,
+      doneCompletedAt: s.done[0].completedAt,
+      todoIsArray: Array.isArray(s.todo)
+    };
+  });
+  expect(migrated.hasCompletedItems).toBe(false);
+  expect(migrated.doneLen).toBe(2);
+  expect(migrated.doneCompletedAt).toBeTruthy();
+  expect(migrated.todoIsArray).toBe(true);
+
+  // Opening the history modal, then expanding a row's detail, must not
+  // throw -- exercises the completedItems -> done migration fix directly
+  // (the original bug: an unhandled exception reading `s.done` on the old
+  // shape aborted renderProjectToolbar() partway through, wiping the whole
+  // toolbar since it has no try/catch).
+  await page.locator('#project-toolbar button', { hasText: 'past sprint' }).click();
+  await expect(page.locator('#sprint-history-modal-backdrop')).toBeVisible();
+  await expect(page.locator('.sprint-history-row')).toBeVisible();
+  await page.locator('.sprint-history-row').click();
+  await expect(page.locator('#sprint-detail-modal-backdrop')).toBeVisible(); // isolated into its own modal
+  await expect(page.locator('.sprint-history-detail-item')).toHaveCount(2);
+  await expect(page.locator('.sprint-history-detail-item').first()).toContainText('Old finished task');
+  await expect(page.locator('.sprint-history-detail-date').first()).not.toBeEmpty();
+
+  // Escape closes one layer at a time: detail modal first...
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#sprint-detail-modal-backdrop')).toBeHidden();
+  await expect(page.locator('#sprint-history-modal-backdrop')).toBeVisible(); // list still open underneath
+  // ...then the list modal on a second press.
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#sprint-history-modal-backdrop')).toBeHidden();
+
+  // Starting a brand-new sprint afterward must still populate To do -- this
+  // reproduces the full reported bug chain: exploring old sprint history
+  // first (which leaves the ephemeral expanded-state pointing at the
+  // now-expanded old sprint), then starting a new sprint. Before the fix,
+  // every render from this point on re-threw inside renderProjectToolbar(),
+  // which meant renderBoard() never ran and the new sprint's tasks never
+  // visually appeared in To do even though they were correctly in the data.
+  const backlogInput = page.locator('.add-input[data-col="backlog"]');
+  await backlogInput.fill('Brand new task');
+  await backlogInput.press('Enter');
+  await page.locator('#project-toolbar button', { hasText: 'Start Sprint' }).click();
+  await page.locator('#sprint-name-input').fill('Sprint 2');
+  await page.locator('#sprint-start-input').fill('2026-08-24');
+  await page.locator('#sprint-end-input').fill('2026-09-07');
+  await page.locator('#sprint-modal-checklist .checklist-row', { hasText: 'Brand new task' }).locator('input[type="checkbox"]').check();
+  await page.locator('#sprint-modal-submit').click();
+  await expect(page.locator('[data-count="todo"]')).toHaveText('1');
+  await expect(page.locator('#dropzone-todo .card')).toContainText('Brand new task');
+
+  expect(errors, 'no console/page errors migrating/viewing an old-shaped archived sprint').toEqual([]);
 });
 
 test('v1.4-shaped scrum project with an in-progress sprint migrates without data loss', async ({ page }) => {
@@ -309,7 +451,7 @@ test('v1.4-shaped scrum project with an in-progress sprint migrates without data
         activeSprint: {
           id: 's1', name: 'Sprint 7', goal: 'Ship the real thing',
           startDate: '2026-08-10', endDate: '2026-08-24',
-          unit: 'points', startingTotal: 11, burnHistory: [{ date: '2026-08-20', remaining: 11 }]
+          unit: 'points', startingTotal: 11
         },
         sprints: []
       }],
@@ -355,13 +497,18 @@ test('v1.4-shaped scrum project with an in-progress sprint migrates without data
       topLevelReview: p.review,
       activeSprintHasTodo: Array.isArray(p.activeSprint.todo),
       activeSprintTodoLen: p.activeSprint.todo.length,
-      activeSprintDoneLen: p.activeSprint.done.length
+      activeSprintDoneLen: p.activeSprint.done.length,
+      backfilledCompletedAt: p.activeSprint.done[0].completedAt,
+      today: todayDateStr()
     };
   });
   expect(shape.topLevelReview).toBeUndefined();
   expect(shape.activeSprintHasTodo).toBe(true);
   expect(shape.activeSprintTodoLen).toBe(1);
   expect(shape.activeSprintDoneLen).toBe(1);
+  // PR3 migration: a pre-existing Done item with no completedAt gets
+  // backfilled, so the recomputed burndown doesn't treat it as still-pending.
+  expect(shape.backfilledCompletedAt).toBe(shape.today);
 
   expect(errors, 'no console/page errors migrating v1.4 scrum-mode data').toEqual([]);
 });
@@ -412,7 +559,14 @@ test('sprint can be edited, deleted (returning even Done tasks to Backlog), and 
   await page.locator('#project-toolbar button', { hasText: 'Delete Sprint' }).click();
   await expect(page.locator('#project-toolbar button', { hasText: 'Start Sprint' })).toBeVisible();
   await expect(page.locator('[data-count="backlog"]')).toHaveText('1'); // the Done task came back too
-  await expect(page.locator('.sprint-history-stack')).toHaveCount(0); // deleted, not archived
+  await expect(page.locator('#project-toolbar button', { hasText: 'past sprint' })).toHaveCount(0); // deleted, not archived
+
+  // The returned task's completedAt must be cleared, not carried along --
+  // otherwise a future sprint that later picks it back up from Backlog
+  // would have its burndown wrongly treat it as already completed.
+  const returnedCompletedAt = await page.evaluate(() =>
+    activeProject().backlog.find(i => i.text === 'Task to delete-test').completedAt);
+  expect(returnedCompletedAt).toBeNull();
 
   await page.locator('#undo-btn').click();
   await expect(page.locator('.sprint-info-name')).toHaveText('Sprint A Renamed');
@@ -427,14 +581,150 @@ test('sprint can be edited, deleted (returning even Done tasks to Backlog), and 
   await page.locator('#dropzone-backlog .card', { hasText: 'Second sprint task' }).dragTo(page.locator('#dropzone-done'));
   await page.locator('#project-toolbar button', { hasText: 'Complete Sprint' }).click();
 
-  await page.locator('.sprint-history-stack').click();
+  await page.locator('#project-toolbar button', { hasText: 'past sprint' }).click();
   await expect(page.locator('.sprint-history-row')).toHaveCount(2);
   const sprintBRow = page.locator('.sprint-history-row', { hasText: 'Sprint B' });
   await sprintBRow.click();
+  await expect(page.locator('#sprint-detail-modal-title')).toHaveText('Sprint B');
   await expect(page.locator('.sprint-history-detail-item')).toContainText('Second sprint task');
-  // collapsing again hides the detail
-  await sprintBRow.click();
-  await expect(page.locator('.sprint-history-detail-item')).toHaveCount(0);
+  // closing the detail modal (via its own × button this time) returns to
+  // the list modal, which is still open underneath rather than reset.
+  await page.locator('#sprint-detail-modal-close').click();
+  await expect(page.locator('#sprint-detail-modal-backdrop')).toBeHidden();
+  await expect(page.locator('#sprint-history-modal-backdrop')).toBeVisible();
 
   expect(errors, 'no console/page errors across edit/delete/history-detail').toEqual([]);
+});
+
+test('past sprints can be reopened (blocked when one is already active) or deleted, with or without keeping their tasks', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
+
+  await page.goto(APP_URL);
+  await page.evaluate(() => {
+    const sprints = [
+      {
+        id: 'sprint-a', name: 'Sprint A', goal: 'Goal A',
+        startDate: '2026-01-01', endDate: '2026-01-14',
+        unit: 'count', startingTotal: 2, completedAt: Date.now(),
+        todo: [], doing: [], review: [],
+        done: [
+          { id: 'a1', text: 'Sprint A task one', created: Date.now(), deadline: null, points: null, completedAt: '2026-01-10' },
+          { id: 'a2', text: 'Sprint A task two', created: Date.now(), deadline: null, points: null, completedAt: '2026-01-12' }
+        ]
+      },
+      {
+        id: 'sprint-b', name: 'Sprint B', goal: 'Goal B',
+        startDate: '2026-02-01', endDate: '2026-02-14',
+        unit: 'count', startingTotal: 1, completedAt: Date.now(),
+        todo: [], doing: [], review: [],
+        done: [{ id: 'b1', text: 'Sprint B task', created: Date.now(), deadline: null, points: null, completedAt: '2026-02-10' }]
+      },
+      {
+        id: 'sprint-c', name: 'Sprint C', goal: 'Goal C',
+        startDate: '2026-03-01', endDate: '2026-03-14',
+        unit: 'count', startingTotal: 1, completedAt: Date.now(),
+        todo: [], doing: [], review: [],
+        done: [{ id: 'c1', text: 'Sprint C task', created: Date.now(), deadline: null, points: null, completedAt: '2026-03-10' }]
+      }
+    ];
+    const state = {
+      projects: [{
+        id: 'proj1', name: 'My Tasks', mode: 'scrum',
+        todo: [], doing: [], done: [], backlog: [], activeSprint: null,
+        sprints
+      }],
+      activeProjectId: 'proj1'
+    };
+    localStorage.setItem('kanban-personal-board-v1', JSON.stringify(state));
+  });
+  await page.reload();
+  await page.evaluate(() => {
+    const backdrop = document.getElementById('save-warning-backdrop');
+    if (backdrop) backdrop.style.display = 'none';
+  });
+
+  let lastDialogMessage = '';
+  page.on('dialog', (d) => { lastDialogMessage = d.message(); d.accept(); });
+
+  // --- Reopen Sprint A: succeeds since nothing is currently active ---
+  await page.locator('#project-toolbar button', { hasText: 'past sprint' }).click();
+  await page.locator('.sprint-history-row', { hasText: 'Sprint A' }).click();
+  await page.locator('#sprint-detail-modal-actions button', { hasText: 'Reopen Sprint' }).click();
+
+  await expect(page.locator('#sprint-detail-modal-backdrop')).toBeHidden();
+  await expect(page.locator('#sprint-history-modal-backdrop')).toBeHidden();
+  await expect(page.locator('.sprint-info-name')).toHaveText('Sprint A');
+  await expect(page.locator('[data-count="done"]')).toHaveText('2');
+
+  const reopened = await page.evaluate(() => {
+    const p = activeProject();
+    return {
+      activeSprintId: p.activeSprint && p.activeSprint.id,
+      hasCompletedAt: p.activeSprint && ('completedAt' in p.activeSprint),
+      sprintsCount: p.sprints.length
+    };
+  });
+  expect(reopened.activeSprintId).toBe('sprint-a');
+  expect(reopened.hasCompletedAt).toBe(false); // matches a freshly-started sprint's shape
+  expect(reopened.sprintsCount).toBe(2); // A moved out of history, leaving B and C
+
+  // --- Reopen Sprint B: blocked because Sprint A is now active ---
+  await page.locator('#project-toolbar button', { hasText: 'past sprint' }).click();
+  await page.locator('.sprint-history-row', { hasText: 'Sprint B' }).click();
+  await page.locator('#sprint-detail-modal-actions button', { hasText: 'Reopen Sprint' }).click();
+  expect(lastDialogMessage).toContain('Sprint A'); // explains *why*, naming the blocker
+
+  const stillBlocked = await page.evaluate(() => {
+    const p = activeProject();
+    return { activeSprintId: p.activeSprint.id, sprintsCount: p.sprints.length };
+  });
+  expect(stillBlocked.activeSprintId).toBe('sprint-a'); // unchanged
+  expect(stillBlocked.sprintsCount).toBe(2); // Sprint B is still archived, nothing silently swapped
+
+  // --- Delete Sprint B (detail modal for it is still open), keeping its task in the Backlog ---
+  await page.locator('.sprint-detail-delete-menu > button').click(); // opens the drop-up menu
+  await expect(page.locator('.sprint-detail-delete-dropdown')).toHaveClass(/open/);
+  // clicking elsewhere closes it without triggering either delete option
+  await page.locator('#sprint-detail-modal-title').click();
+  await expect(page.locator('.sprint-detail-delete-dropdown')).not.toHaveClass(/open/);
+  expect(await page.evaluate(() => activeProject().sprints.length)).toBe(2); // nothing deleted yet
+
+  await page.locator('.sprint-detail-delete-menu > button').click();
+  await page.locator('.sprint-detail-delete-dropdown button', { hasText: 'Delete (Keep Tasks)' }).click();
+  await expect(page.locator('#sprint-detail-modal-backdrop')).toBeHidden();
+  await expect(page.locator('#sprint-history-modal-backdrop')).toBeVisible(); // list stays open, just refreshed
+  await expect(page.locator('.sprint-history-row')).toHaveCount(1); // only Sprint C left
+
+  const afterKeepDelete = await page.evaluate(() => {
+    const p = activeProject();
+    const backlogItem = p.backlog.find(i => i.text === 'Sprint B task');
+    return {
+      sprintsCount: p.sprints.length,
+      backlogHasTask: !!backlogItem,
+      backlogTaskCompletedAt: backlogItem ? backlogItem.completedAt : undefined
+    };
+  });
+  expect(afterKeepDelete.sprintsCount).toBe(1);
+  expect(afterKeepDelete.backlogHasTask).toBe(true);
+  expect(afterKeepDelete.backlogTaskCompletedAt).toBeNull(); // cleared, not carried into a future sprint
+
+  // --- Delete Sprint C, removing its task entirely ---
+  await page.locator('.sprint-history-row', { hasText: 'Sprint C' }).click();
+  await page.locator('.sprint-detail-delete-menu > button').click();
+  await page.locator('.sprint-detail-delete-dropdown button', { hasText: 'Delete (Remove Tasks)' }).click();
+  await expect(page.locator('#sprint-history-modal-body .sprint-history-detail-empty')).toHaveText('No past sprints.');
+
+  const afterWipeDelete = await page.evaluate(() => {
+    const p = activeProject();
+    return {
+      sprintsCount: p.sprints.length,
+      backlogHasTask: p.backlog.some(i => i.text === 'Sprint C task')
+    };
+  });
+  expect(afterWipeDelete.sprintsCount).toBe(0);
+  expect(afterWipeDelete.backlogHasTask).toBe(false); // gone, not returned anywhere
+
+  expect(errors, 'no console/page errors across reopen/blocked-reopen/delete flows').toEqual([]);
 });

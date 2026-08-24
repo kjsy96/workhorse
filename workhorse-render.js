@@ -487,6 +487,49 @@
         });
         dropdown.appendChild(clearPointsBtn);
 
+        // Only meaningful for a task currently sitting in a sprint's Done
+        // column -- lets the user see/backdate when it actually finished.
+        // completedAt itself is kept in sync automatically elsewhere
+        // (dragging in/out of Done, sendToOtherPool, moveItemToProject); this
+        // field only ever edits the date, never clears it, since "in Done
+        // with no completion date" would break the burndown formula's
+        // invariant that completedAt is set iff the item is in Done.
+        const isScrumDone = col === 'done' && container === proj.activeSprint;
+
+        const completedDivider = document.createElement('div');
+        completedDivider.className = 'card-menu-divider';
+        completedDivider.style.display = isScrumDone ? '' : 'none';
+        dropdown.appendChild(completedDivider);
+
+        const completedRow = document.createElement('div');
+        completedRow.className = 'card-menu-deadline-row';
+        completedRow.style.display = isScrumDone ? '' : 'none';
+        const completedLabel = document.createElement('span');
+        completedLabel.className = 'card-menu-label';
+        completedLabel.textContent = 'Completed on';
+        completedRow.appendChild(completedLabel);
+        const completedInput = document.createElement('input');
+        completedInput.type = 'date';
+        completedInput.className = 'card-menu-date-input';
+        if (item.completedAt) completedInput.value = item.completedAt;
+        completedInput.addEventListener('click', (e) => e.stopPropagation());
+        completedInput.addEventListener('mousedown', (e) => e.stopPropagation());
+        completedRow.appendChild(completedInput);
+        dropdown.appendChild(completedRow);
+
+        let completedHistoryPushed = false;
+        completedInput.addEventListener('focus', () => {
+          completedHistoryPushed = false;
+        });
+        completedInput.addEventListener('change', (e) => {
+          if (!completedHistoryPushed) {
+            pushHistory();
+            completedHistoryPushed = true;
+          }
+          item.completedAt = e.target.value || todayDateStr();
+          save(state);
+        });
+
         const sendDivider = document.createElement('div');
         sendDivider.className = 'card-menu-divider';
         dropdown.appendChild(sendDivider);
@@ -730,6 +773,25 @@
     return proj;
   }
 
+  // Keeps item.completedAt in sync with "currently sitting in a sprint's
+  // Done column" -- called from every function that relocates an item
+  // (moveItem, sendToOtherPool, moveItemToProject), so the invariant holds
+  // no matter which path an item travels. Without this, an item could leave
+  // a sprint's Done column via a project-move or pool-send (both bypass
+  // moveItem) carrying a stale completedAt with it; if later pulled into a
+  // *different* sprint's To do, that stale date would make the burndown
+  // formula wrongly treat it as already-old-news and silently exclude it
+  // from that sprint's remaining count while it visibly sits in To do.
+  function syncCompletedAt(loc, toContainer, toCol, item) {
+    const wasInSprintDone = loc.container === loc.proj.activeSprint && loc.col === 'done';
+    const entersSprintDone = toContainer === loc.proj.activeSprint && toCol === 'done';
+    if (entersSprintDone) {
+      item.completedAt = wasInSprintDone ? item.completedAt : todayDateStr();
+    } else if (wasInSprintDone) {
+      item.completedAt = null;
+    }
+  }
+
   function findItem(id) {
     for (const proj of state.projects) {
       for (const col of ['todo', 'doing', 'done']) {
@@ -764,6 +826,7 @@
     if (!targetContainer) return; // e.g. scrum view with no active sprint -- nowhere to drop
     pushHistory();
     const [item] = loc.container[loc.col].splice(loc.idx, 1);
+    syncCompletedAt(loc, targetContainer, targetCol, item);
     if (targetIndex === undefined || targetIndex > targetContainer[targetCol].length) {
       targetContainer[targetCol].push(item);
     } else {
@@ -785,8 +848,10 @@
     // at an equivalent sprint column in a different, possibly sprint-less
     // project.
     if (loc.container === loc.proj && loc.col !== 'backlog') {
+      syncCompletedAt(loc, targetProj, 'todo', item);
       targetProj.todo.push(item);
     } else {
+      syncCompletedAt(loc, targetProj, 'backlog', item);
       targetProj.backlog.push(item);
     }
     save(state);
@@ -800,8 +865,10 @@
     pushHistory();
     const [item] = loc.container[loc.col].splice(loc.idx, 1);
     if (loc.container === loc.proj && loc.col !== 'backlog') {
+      syncCompletedAt(loc, loc.proj, 'backlog', item);
       loc.proj.backlog.push(item); // kanban -> scrum backlog
     } else {
+      syncCompletedAt(loc, loc.proj, 'todo', item);
       loc.proj.todo.push(item); // scrum (backlog or in-sprint) -> kanban todo
     }
     save(state);
@@ -1022,7 +1089,8 @@
         const container = resolveContainer(proj, col);
         if (!container) return; // e.g. scrum view with no active sprint yet
         pushHistory();
-        container[col].push({ id: uid(), text: text, created: Date.now(), deadline: null, points: null });
+        const completedAt = (container === proj.activeSprint && col === 'done') ? todayDateStr() : null;
+        container[col].push({ id: uid(), text: text, created: Date.now(), deadline: null, points: null, completedAt: completedAt });
         save(state);
         input.value = '';
         input.style.height = 'auto';

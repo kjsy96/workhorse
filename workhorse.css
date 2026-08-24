@@ -336,19 +336,98 @@
     color: var(--ink-soft);
   }
 
-  .sprint-history-stack {
-    max-width: 220px;
-    padding: 6px 12px;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
+  .sprint-history-modal {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: var(--shadow-hover);
+    max-width: 520px;
+    width: 100%;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
 
-  .sprint-history-list {
+  .sprint-history-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--line);
+    flex-shrink: 0;
+  }
+
+  .sprint-history-modal-header h2 {
+    font-family: 'Fraunces', serif;
+    color: var(--ink);
+    margin: 0;
+  }
+
+  .sprint-detail-modal-backdrop {
+    /* Layered on top of the list modal (z-index 1000), not a replacement
+       for it -- closing this one reveals the list still open beneath. */
+    z-index: 1010;
+  }
+
+  .sprint-detail-modal-meta {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-soft);
+    margin-top: 4px;
+  }
+
+  .sprint-detail-modal-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 16px 24px 20px;
+    border-top: 1px solid var(--line);
+    flex-shrink: 0;
+  }
+
+  .sprint-detail-delete-menu {
+    position: relative;
+  }
+
+  .sprint-detail-delete-dropdown {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 4px);
+    right: 0;
+    min-width: 200px;
     background: var(--paper);
     border: 1px solid var(--line);
     border-radius: 10px;
-    padding: 10px 14px;
-    max-width: 420px;
+    box-shadow: var(--shadow-hover);
+    padding: 6px;
+    z-index: 30;
+    text-align: left;
+  }
+
+  .sprint-detail-delete-dropdown.open {
+    display: block;
+  }
+
+  .sprint-history-modal-close {
+    background: none;
+    border: none;
+    font-size: 22px;
+    line-height: 1;
+    color: var(--ink-soft);
+    cursor: pointer;
+    padding: 0 4px;
+  }
+
+  .sprint-history-modal-close:hover {
+    color: var(--ink);
+  }
+
+  .sprint-history-modal-body {
+    padding: 8px 24px 20px;
+    overflow-y: auto;
   }
 
   .sprint-history-row {
@@ -373,6 +452,9 @@
   }
 
   .sprint-history-detail-item {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
     font-size: 12px;
     color: var(--ink);
     padding: 2px 0;
@@ -381,6 +463,12 @@
   .sprint-history-detail-item::before {
     content: '✓ ';
     color: var(--done);
+  }
+
+  .sprint-history-detail-date {
+    font-family: 'IBM Plex Mono', monospace;
+    color: var(--ink-soft);
+    white-space: nowrap;
   }
 
   .sprint-history-detail-empty {

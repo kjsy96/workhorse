@@ -56,6 +56,30 @@
   </div>
 </div>
 
+<div class="sprint-modal-backdrop" id="sprint-history-modal-backdrop" style="display:none;">
+  <div class="sprint-history-modal">
+    <div class="sprint-history-modal-header">
+      <h2>Past Sprints</h2>
+      <button class="sprint-history-modal-close" id="sprint-history-modal-close" title="Close">&times;</button>
+    </div>
+    <div class="sprint-history-modal-body" id="sprint-history-modal-body"></div>
+  </div>
+</div>
+
+<div class="sprint-modal-backdrop sprint-detail-modal-backdrop" id="sprint-detail-modal-backdrop" style="display:none;">
+  <div class="sprint-history-modal">
+    <div class="sprint-history-modal-header">
+      <div>
+        <h2 id="sprint-detail-modal-title"></h2>
+        <div class="sprint-detail-modal-meta" id="sprint-detail-modal-meta"></div>
+      </div>
+      <button class="sprint-history-modal-close" id="sprint-detail-modal-close" title="Close">&times;</button>
+    </div>
+    <div class="sprint-history-modal-body" id="sprint-detail-modal-body"></div>
+    <div class="sprint-detail-modal-actions" id="sprint-detail-modal-actions"></div>
+  </div>
+</div>
+
 <header>
   <div class="header-left">
     <div class="history-controls">
@@ -63,7 +87,7 @@
       <button class="history-btn" id="redo-btn" title="Redo (Ctrl+Y)" disabled>&#8631;</button>
       <button class="history-btn" id="theme-toggle-btn" title="Switch to dark mode">&#9789;</button>
     </div>
-    <h1>Workhorse <span class="version-badge">v1.4</span></h1>
+    <h1>Workhorse <span class="version-badge">v1.5</span></h1>
   </div>
   <div class="header-right">
     <div class="save-status" id="save-status">
