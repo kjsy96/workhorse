@@ -1,4 +1,5 @@
   let expandedSprintHistory = new Set();
+  let expandedSprintDetail = new Set(); // keyed by sprint.id, unique across the app
 
   function renderProjectToolbar() {
     const proj = activeProject();
@@ -48,11 +49,24 @@
 
       toolbar.appendChild(info);
 
+      const editBtn = document.createElement('button');
+      editBtn.className = 'save-status-btn';
+      editBtn.textContent = 'Edit';
+      editBtn.title = 'Edit sprint name, goal, or dates';
+      editBtn.addEventListener('click', () => openEditSprintModal(proj));
+      toolbar.appendChild(editBtn);
+
       const completeBtn = document.createElement('button');
       completeBtn.className = 'save-status-btn';
       completeBtn.textContent = 'Complete Sprint';
       completeBtn.addEventListener('click', () => completeSprint(proj));
       toolbar.appendChild(completeBtn);
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'save-status-btn';
+      deleteBtn.textContent = 'Delete Sprint';
+      deleteBtn.addEventListener('click', () => deleteSprint(proj));
+      toolbar.appendChild(deleteBtn);
 
       upsertTodayBurndownPoint(proj);
       renderBurndownChart(burndownContainer, proj.activeSprint);
@@ -81,7 +95,31 @@
           const row = document.createElement('div');
           row.className = 'sprint-history-row';
           row.textContent = s.name + ' (' + formatDeadline(s.startDate) + '–' + formatDeadline(s.endDate) + ')' + (s.goal ? ' — ' + s.goal : '');
+          row.addEventListener('click', () => {
+            if (expandedSprintDetail.has(s.id)) expandedSprintDetail.delete(s.id);
+            else expandedSprintDetail.add(s.id);
+            renderProjectToolbar();
+          });
           list.appendChild(row);
+
+          if (expandedSprintDetail.has(s.id)) {
+            const detail = document.createElement('div');
+            detail.className = 'sprint-history-detail';
+            if (!s.done.length) {
+              const empty = document.createElement('div');
+              empty.className = 'sprint-history-detail-empty';
+              empty.textContent = 'Nothing was completed in this sprint.';
+              detail.appendChild(empty);
+            } else {
+              s.done.forEach(item => {
+                const line = document.createElement('div');
+                line.className = 'sprint-history-detail-item';
+                line.textContent = item.text.split('\n')[0].slice(0, 100);
+                detail.appendChild(line);
+              });
+            }
+            list.appendChild(detail);
+          }
         });
         const collapseBtn = document.createElement('button');
         collapseBtn.className = 'done-stack-collapse';
@@ -152,7 +190,33 @@
     render();
   }
 
+  // Distinct from Complete Sprint: nothing is archived to history, and
+  // *everything* currently in the sprint -- including tasks already in
+  // Done -- returns to the Backlog, since deleting means the sprint itself
+  // was a mistake, not that its finished work should be credited anywhere.
+  function deleteSprint(proj) {
+    if (!proj.activeSprint) return;
+    const confirmed = confirm(
+      'Delete "' + proj.activeSprint.name + '"? All its tasks, including any already marked Done, will ' +
+      'return to the Backlog, and the sprint won’t be kept in history. You can undo this with Ctrl+Z.'
+    );
+    if (!confirmed) return;
+    pushHistory();
+    const sprint = proj.activeSprint;
+    proj.backlog.push(...sprint.todo, ...sprint.doing, ...sprint.review, ...sprint.done);
+    proj.activeSprint = null;
+    save(state);
+    render();
+  }
+
+  let sprintModalMode = 'create'; // or 'edit'
+
   function openStartSprintModal(proj) {
+    sprintModalMode = 'create';
+    document.getElementById('sprint-modal-title').textContent = 'Start a sprint';
+    document.getElementById('sprint-modal-checklist-section').style.display = '';
+    document.getElementById('sprint-modal-submit').textContent = 'Start Sprint';
+
     document.getElementById('sprint-name-input').value = '';
     document.getElementById('sprint-goal-input').value = '';
     document.getElementById('sprint-start-input').value = '';
@@ -183,6 +247,23 @@
     document.getElementById('sprint-name-input').focus();
   }
 
+  function openEditSprintModal(proj) {
+    if (!proj.activeSprint) return;
+    sprintModalMode = 'edit';
+    document.getElementById('sprint-modal-title').textContent = 'Edit sprint';
+    document.getElementById('sprint-modal-checklist-section').style.display = 'none';
+    document.getElementById('sprint-modal-submit').textContent = 'Save Changes';
+
+    const sprint = proj.activeSprint;
+    document.getElementById('sprint-name-input').value = sprint.name;
+    document.getElementById('sprint-goal-input').value = sprint.goal || '';
+    document.getElementById('sprint-start-input').value = sprint.startDate;
+    document.getElementById('sprint-end-input').value = sprint.endDate;
+
+    document.getElementById('sprint-modal-backdrop').style.display = 'flex';
+    document.getElementById('sprint-name-input').focus();
+  }
+
   function closeStartSprintModal() {
     document.getElementById('sprint-modal-backdrop').style.display = 'none';
   }
@@ -195,6 +276,16 @@
     if (!name) { alert('Give the sprint a name.'); return; }
     if (!startDate || !endDate) { alert('Pick a start and end date.'); return; }
     if (endDate < startDate) { alert('End date must be on or after the start date.'); return; }
+
+    if (sprintModalMode === 'edit') {
+      closeStartSprintModal();
+      pushHistory();
+      Object.assign(proj.activeSprint, { name: name, goal: goal, startDate: startDate, endDate: endDate });
+      save(state);
+      render();
+      return;
+    }
+
     const selectedIds = Array.prototype.slice
       .call(document.querySelectorAll('#sprint-modal-checklist input[type="checkbox"]:checked'))
       .map(cb => cb.dataset.itemId);

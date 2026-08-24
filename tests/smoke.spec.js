@@ -365,3 +365,76 @@ test('v1.4-shaped scrum project with an in-progress sprint migrates without data
 
   expect(errors, 'no console/page errors migrating v1.4 scrum-mode data').toEqual([]);
 });
+
+test('sprint can be edited, deleted (returning even Done tasks to Backlog), and history shows what finished', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
+
+  await page.goto(APP_URL);
+  await page.evaluate(() => {
+    const backdrop = document.getElementById('save-warning-backdrop');
+    if (backdrop) backdrop.style.display = 'none';
+  });
+  page.on('dialog', (d) => d.accept());
+  await page.locator('.view-toggle-option', { hasText: 'Scrum' }).click();
+
+  async function startSprint(name, startDate, endDate, includeTaskTexts) {
+    await page.locator('#project-toolbar button', { hasText: 'Start Sprint' }).click();
+    await page.locator('#sprint-name-input').fill(name);
+    await page.locator('#sprint-start-input').fill(startDate);
+    await page.locator('#sprint-end-input').fill(endDate);
+    for (const text of includeTaskTexts || []) {
+      await page.locator('#sprint-modal-checklist .checklist-row', { hasText: text }).locator('input[type="checkbox"]').check();
+    }
+    await page.locator('#sprint-modal-submit').click();
+  }
+
+  // --- Edit ---
+  const backlogInput = page.locator('.add-input[data-col="backlog"]');
+  await backlogInput.fill('Task to delete-test');
+  await backlogInput.press('Enter');
+  await startSprint('Sprint A', '2026-08-01', '2026-08-14', ['Task to delete-test']);
+
+  await page.locator('#project-toolbar button', { hasText: 'Edit' }).click();
+  await expect(page.locator('#sprint-modal-title')).toHaveText('Edit sprint');
+  await expect(page.locator('#sprint-modal-checklist-section')).toBeHidden();
+  await expect(page.locator('#sprint-name-input')).toHaveValue('Sprint A'); // pre-filled
+  await page.locator('#sprint-name-input').fill('Sprint A Renamed');
+  await page.locator('#sprint-end-input').fill('2026-08-21');
+  await page.locator('#sprint-modal-submit').click();
+  await expect(page.locator('.sprint-info-name')).toHaveText('Sprint A Renamed');
+
+  // --- Delete, including an already-Done task ---
+  await page.locator('#dropzone-todo .card').dragTo(page.locator('#dropzone-done'));
+  await expect(page.locator('[data-count="done"]')).toHaveText('1');
+
+  await page.locator('#project-toolbar button', { hasText: 'Delete Sprint' }).click();
+  await expect(page.locator('#project-toolbar button', { hasText: 'Start Sprint' })).toBeVisible();
+  await expect(page.locator('[data-count="backlog"]')).toHaveText('1'); // the Done task came back too
+  await expect(page.locator('.sprint-history-stack')).toHaveCount(0); // deleted, not archived
+
+  await page.locator('#undo-btn').click();
+  await expect(page.locator('.sprint-info-name')).toHaveText('Sprint A Renamed');
+  await expect(page.locator('[data-count="done"]')).toHaveText('1');
+
+  // --- History detail: complete a fresh sprint and view what finished ---
+  await page.locator('#project-toolbar button', { hasText: 'Complete Sprint' }).click();
+  await startSprint('Sprint B', '2026-09-01', '2026-09-14');
+  const newBacklogInput = page.locator('.add-input[data-col="backlog"]');
+  await newBacklogInput.fill('Second sprint task');
+  await newBacklogInput.press('Enter');
+  await page.locator('#dropzone-backlog .card', { hasText: 'Second sprint task' }).dragTo(page.locator('#dropzone-done'));
+  await page.locator('#project-toolbar button', { hasText: 'Complete Sprint' }).click();
+
+  await page.locator('.sprint-history-stack').click();
+  await expect(page.locator('.sprint-history-row')).toHaveCount(2);
+  const sprintBRow = page.locator('.sprint-history-row', { hasText: 'Sprint B' });
+  await sprintBRow.click();
+  await expect(page.locator('.sprint-history-detail-item')).toContainText('Second sprint task');
+  // collapsing again hides the detail
+  await sprintBRow.click();
+  await expect(page.locator('.sprint-history-detail-item')).toHaveCount(0);
+
+  expect(errors, 'no console/page errors across edit/delete/history-detail').toEqual([]);
+});

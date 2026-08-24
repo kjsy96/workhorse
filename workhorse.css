@@ -356,10 +356,37 @@
     padding: 4px 0;
     border-bottom: 1px solid var(--line);
     color: var(--ink-soft);
+    cursor: pointer;
+  }
+
+  .sprint-history-row:hover {
+    color: var(--ink);
   }
 
   .sprint-history-row:last-child {
     border-bottom: none;
+  }
+
+  .sprint-history-detail {
+    padding: 6px 0 8px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .sprint-history-detail-item {
+    font-size: 12px;
+    color: var(--ink);
+    padding: 2px 0;
+  }
+
+  .sprint-history-detail-item::before {
+    content: '✓ ';
+    color: var(--done);
+  }
+
+  .sprint-history-detail-empty {
+    font-size: 12px;
+    color: var(--ink-soft);
+    font-style: italic;
   }
 
   .burndown-container:empty {

@@ -30,7 +30,7 @@
 
 <div class="sprint-modal-backdrop" id="sprint-modal-backdrop" style="display:none;">
   <div class="sprint-modal">
-    <h2>Start a sprint</h2>
+    <h2 id="sprint-modal-title">Start a sprint</h2>
     <label class="sprint-modal-label">Name
       <input type="text" id="sprint-name-input" class="card-menu-date-input sprint-modal-input" placeholder="Sprint 1">
     </label>
@@ -45,8 +45,10 @@
         <input type="date" id="sprint-end-input" class="card-menu-date-input sprint-modal-input">
       </label>
     </div>
-    <div class="sprint-modal-label">Include from Backlog</div>
-    <div class="sprint-modal-checklist" id="sprint-modal-checklist"></div>
+    <div id="sprint-modal-checklist-section">
+      <div class="sprint-modal-label">Include from Backlog</div>
+      <div class="sprint-modal-checklist" id="sprint-modal-checklist"></div>
+    </div>
     <div class="sprint-modal-actions">
       <button class="save-status-btn" id="sprint-modal-cancel">Cancel</button>
       <button class="save-status-btn" id="sprint-modal-submit">Start Sprint</button>
