@@ -17,7 +17,7 @@
   function makeProject(name) {
     return {
       id: uid(), name: name,
-      todo: [], doing: [], review: [], done: [],
+      todo: [], doing: [], done: [],
       backlog: [], mode: 'kanban', activeSprint: null, sprints: []
     };
   }
@@ -49,9 +49,28 @@
       });
       if (!p.mode) p.mode = 'kanban';
       if (!Array.isArray(p.backlog)) p.backlog = [];
-      if (!Array.isArray(p.review)) p.review = [];
       if (!Array.isArray(p.sprints)) p.sprints = [];
       if (p.activeSprint === undefined) p.activeSprint = null;
+
+      // Pre-separation (v1.4) shape: todo/doing/review/done were shared
+      // between Kanban and, in scrum mode, the active sprint's own board.
+      // A freshly-created activeSprint (from the updated startSprint())
+      // always has its own nested todo/doing/review/done, so their absence
+      // here is a reliable one-time marker for "this project predates the
+      // pool split" -- safe to run every load, since it only fires once.
+      if (p.activeSprint && !Array.isArray(p.activeSprint.todo)) {
+        p.activeSprint.todo = p.todo || [];
+        p.activeSprint.doing = p.doing || [];
+        p.activeSprint.review = p.review || [];
+        p.activeSprint.done = p.done || [];
+        if (!Array.isArray(p.activeSprint.burnHistory)) p.activeSprint.burnHistory = [];
+        p.todo = [];
+        p.doing = [];
+        p.done = [];
+      }
+      // `review` only ever exists nested under activeSprint now -- Kanban
+      // never had it, and Scrum's lives on the sprint, not the project.
+      if (p.review !== undefined) delete p.review;
     });
     if (!parsed.activeProjectId || !parsed.projects.some(p => p.id === parsed.activeProjectId)) {
       parsed.activeProjectId = parsed.projects[0].id;

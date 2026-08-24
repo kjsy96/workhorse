@@ -487,8 +487,33 @@
     display: none;
   }
 
-  .toolbar-mode-btn {
+  .view-toggle {
+    display: flex;
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+
+  .view-toggle-option {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 11.5px;
     font-weight: 500;
+    background: var(--paper);
+    border: none;
+    padding: 4px 14px;
+    cursor: pointer;
+    color: var(--ink-soft);
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+
+  .view-toggle-option + .view-toggle-option {
+    border-left: 1px solid var(--line);
+  }
+
+  .view-toggle-option.active {
+    background: var(--ink);
+    color: var(--paper);
   }
 
   .project-tab {

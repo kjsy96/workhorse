@@ -198,7 +198,8 @@
     COLS.forEach(col => {
       const zone = document.getElementById('dropzone-' + col);
       zone.innerHTML = '';
-      const items = proj[col] || [];
+      const container = resolveContainer(proj, col);
+      const items = (container && container[col]) || [];
       document.querySelector('[data-count="' + col + '"]').textContent = items.length;
 
       const stackActive = col === 'done' && items.length > DONE_STACK_VISIBLE_COUNT;
@@ -486,6 +487,20 @@
         });
         dropdown.appendChild(clearPointsBtn);
 
+        const sendDivider = document.createElement('div');
+        sendDivider.className = 'card-menu-divider';
+        dropdown.appendChild(sendDivider);
+
+        const inKanbanPool = col !== 'backlog' && resolveContainer(proj, col) === proj;
+        const sendBtn = document.createElement('button');
+        sendBtn.className = 'card-menu-item';
+        sendBtn.textContent = inKanbanPool ? 'Send to Scrum' : 'Send to Kanban';
+        sendBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          sendToOtherPool(item.id);
+        });
+        dropdown.appendChild(sendBtn);
+
         if (state.projects.length > 1) {
           const divider1 = document.createElement('div');
           divider1.className = 'card-menu-divider';
@@ -704,11 +719,30 @@
     });
   }
 
+  // Kanban's todo/doing/done and Scrum's backlog live directly on the
+  // project; Scrum's own todo/doing/review/done live nested under its
+  // activeSprint instead, so the two pools never share storage. This is
+  // the one place that distinction is resolved, so findItem/moveItem/
+  // renderBoard/the add-task handler don't each need their own copy of it.
+  function resolveContainer(proj, col) {
+    if (col === 'backlog') return proj;
+    if (proj.mode === 'scrum') return proj.activeSprint || null;
+    return proj;
+  }
+
   function findItem(id) {
     for (const proj of state.projects) {
-      for (const col of COLS) {
+      for (const col of ['todo', 'doing', 'done']) {
         const idx = proj[col].findIndex(i => i.id === id);
-        if (idx !== -1) return { proj, col, idx };
+        if (idx !== -1) return { proj, container: proj, col, idx };
+      }
+      let idx = proj.backlog.findIndex(i => i.id === id);
+      if (idx !== -1) return { proj, container: proj, col: 'backlog', idx };
+      if (proj.activeSprint) {
+        for (const col of ['todo', 'doing', 'review', 'done']) {
+          idx = proj.activeSprint[col].findIndex(i => i.id === id);
+          if (idx !== -1) return { proj, container: proj.activeSprint, col, idx };
+        }
       }
     }
     return null;
@@ -718,7 +752,7 @@
     const loc = findItem(id);
     if (loc) {
       pushHistory();
-      loc.proj[loc.col].splice(loc.idx, 1);
+      loc.container[loc.col].splice(loc.idx, 1);
       save(state);
     }
   }
@@ -726,13 +760,14 @@
   function moveItem(id, targetCol, targetIndex) {
     const loc = findItem(id);
     if (!loc) return;
+    const targetContainer = resolveContainer(loc.proj, targetCol);
+    if (!targetContainer) return; // e.g. scrum view with no active sprint -- nowhere to drop
     pushHistory();
-    const [item] = loc.proj[loc.col].splice(loc.idx, 1);
-    const targetProj = loc.proj;
-    if (targetIndex === undefined || targetIndex > targetProj[targetCol].length) {
-      targetProj[targetCol].push(item);
+    const [item] = loc.container[loc.col].splice(loc.idx, 1);
+    if (targetIndex === undefined || targetIndex > targetContainer[targetCol].length) {
+      targetContainer[targetCol].push(item);
     } else {
-      targetProj[targetCol].splice(targetIndex, 0, item);
+      targetContainer[targetCol].splice(targetIndex, 0, item);
     }
     save(state);
   }
@@ -743,9 +778,34 @@
     const targetProj = state.projects.find(p => p.id === targetProjectId);
     if (!targetProj) return;
     pushHistory();
-    const [item] = loc.proj[loc.col].splice(loc.idx, 1);
-    targetProj[loc.col].push(item);
+    const [item] = loc.container[loc.col].splice(loc.idx, 1);
+    // Preserve pool: a Kanban item lands in the target's todo; anything
+    // from the Scrum side (backlog or an active sprint's columns) lands in
+    // the target's backlog -- simplest safe default rather than guessing
+    // at an equivalent sprint column in a different, possibly sprint-less
+    // project.
+    if (loc.container === loc.proj && loc.col !== 'backlog') {
+      targetProj.todo.push(item);
+    } else {
+      targetProj.backlog.push(item);
+    }
     save(state);
+  }
+
+  // Moves a card to the other pool within the same project (Kanban <->
+  // Scrum), via the kebab menu's "Send to Scrum"/"Send to Kanban" action.
+  function sendToOtherPool(id) {
+    const loc = findItem(id);
+    if (!loc) return;
+    pushHistory();
+    const [item] = loc.container[loc.col].splice(loc.idx, 1);
+    if (loc.container === loc.proj && loc.col !== 'backlog') {
+      loc.proj.backlog.push(item); // kanban -> scrum backlog
+    } else {
+      loc.proj.todo.push(item); // scrum (backlog or in-sprint) -> kanban todo
+    }
+    save(state);
+    render();
   }
 
   // targetIndex is the position within the current (pre-removal) projects
@@ -958,8 +1018,11 @@
         const text = input.value.trim();
         if (!text) return;
         const col = input.dataset.col;
+        const proj = activeProject();
+        const container = resolveContainer(proj, col);
+        if (!container) return; // e.g. scrum view with no active sprint yet
         pushHistory();
-        activeProject()[col].push({ id: uid(), text: text, created: Date.now(), deadline: null, points: null });
+        container[col].push({ id: uid(), text: text, created: Date.now(), deadline: null, points: null });
         save(state);
         input.value = '';
         input.style.height = 'auto';

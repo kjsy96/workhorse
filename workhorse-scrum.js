@@ -7,12 +7,16 @@
 
     document.getElementById('board').classList.toggle('mode-scrum', proj.mode === 'scrum');
 
-    const modeBtn = document.createElement('button');
-    modeBtn.className = 'save-status-btn toolbar-mode-btn';
-    modeBtn.textContent = proj.mode === 'scrum' ? 'Scrum mode' : 'Kanban mode';
-    modeBtn.title = proj.mode === 'scrum' ? 'Switch to Kanban mode' : 'Switch to Scrum mode';
-    modeBtn.addEventListener('click', () => toggleProjectMode(proj));
-    toolbar.appendChild(modeBtn);
+    const toggleWrap = document.createElement('div');
+    toggleWrap.className = 'view-toggle';
+    ['kanban', 'scrum'].forEach(m => {
+      const btn = document.createElement('button');
+      btn.className = 'view-toggle-option' + (proj.mode === m ? ' active' : '');
+      btn.textContent = m === 'kanban' ? 'Kanban' : 'Scrum';
+      btn.addEventListener('click', () => setProjectMode(proj, m));
+      toggleWrap.appendChild(btn);
+    });
+    toolbar.appendChild(toggleWrap);
 
     const burndownContainer = document.getElementById('burndown-container');
     if (proj.mode !== 'scrum' || !proj.activeSprint) {
@@ -92,28 +96,13 @@
     }
   }
 
-  function toggleProjectMode(proj) {
-    if (proj.mode === 'kanban') {
-      const hasItems = proj.todo.length || proj.doing.length || proj.done.length;
-      if (hasItems) {
-        const confirmed = confirm(
-          'Switch "' + proj.name + '" to Scrum mode? Its current tasks will move into the Backlog. ' +
-          'You can undo this with Ctrl+Z.'
-        );
-        if (!confirmed) return;
-        pushHistory();
-        proj.backlog.push(...proj.todo, ...proj.doing, ...proj.done);
-        proj.todo = [];
-        proj.doing = [];
-        proj.done = [];
-      } else {
-        pushHistory();
-      }
-      proj.mode = 'scrum';
-    } else {
-      pushHistory();
-      proj.mode = 'kanban';
-    }
+  // Kanban and Scrum are separate, simultaneously-persistent pools (see
+  // sendToOtherPool in workhorse-render.js for how a task actually crosses
+  // between them) -- so switching which one is displayed never moves data,
+  // and needs no confirm or undo-history entry.
+  function setProjectMode(proj, mode) {
+    if (proj.mode === mode) return;
+    proj.mode = mode;
     save(state);
     render();
   }
@@ -135,9 +124,10 @@
     proj.activeSprint = {
       id: uid(), name: meta.name, goal: meta.goal,
       startDate: meta.startDate, endDate: meta.endDate,
-      unit: unit, startingTotal: startingTotal, burnHistory: []
+      unit: unit, startingTotal: startingTotal, burnHistory: [],
+      todo: [], doing: [], review: [], done: []
     };
-    proj.todo.push(...selected);
+    proj.activeSprint.todo.push(...selected);
     save(state);
     render();
   }
@@ -150,16 +140,13 @@
     );
     if (!confirmed) return;
     pushHistory();
-    const completedItems = proj.done;
-    proj.backlog.push(...proj.todo, ...proj.doing, ...proj.review);
-    proj.sprints.push(Object.assign({}, proj.activeSprint, {
-      completedAt: Date.now(),
-      completedItems: completedItems
-    }));
-    proj.todo = [];
-    proj.doing = [];
-    proj.review = [];
-    proj.done = [];
+    const sprint = proj.activeSprint;
+    proj.backlog.push(...sprint.todo, ...sprint.doing, ...sprint.review);
+    sprint.todo = [];
+    sprint.doing = [];
+    sprint.review = [];
+    sprint.completedAt = Date.now();
+    proj.sprints.push(sprint);
     proj.activeSprint = null;
     save(state);
     render();
@@ -230,7 +217,7 @@
   }
 
   function sprintRemaining(proj, sprint) {
-    const active = proj.todo.concat(proj.doing, proj.review);
+    const active = sprint.todo.concat(sprint.doing, sprint.review);
     return sprint.unit === 'points'
       ? active.reduce((sum, i) => sum + (i.points || 0), 0)
       : active.length;
