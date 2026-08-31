@@ -746,6 +746,21 @@
     grid-template-columns: minmax(160px, 0.8fr) repeat(4, 1fr);
   }
 
+  /* Scrum splits the board 5 ways instead of Kanban's 3, so reusing
+     Kanban's 1160px cap left every column noticeably cramped for no real
+     reason. Widening it needs project-toolbar and burndown-container to
+     grow along with it, or they'd drift out of alignment with the board
+     edges below them (this project has hit that exact mismatch once
+     before) -- body.mode-scrum (toggled alongside #board's own
+     .mode-scrum class in renderProjectToolbar()) is the hook for all
+     three, since plain CSS can't select a *preceding* sibling based on a
+     later element's class. */
+  body.mode-scrum .project-toolbar,
+  body.mode-scrum .burndown-container,
+  body.mode-scrum .board {
+    max-width: 1440px;
+  }
+
   @media (max-width: 860px) {
     .board { grid-template-columns: 1fr; }
   }

@@ -986,3 +986,38 @@ test('pre-issue-#32 Kanban Done items with no completedAt get backfilled on load
 
   expect(errors, 'no console/page errors migrating a legacy Kanban Done item').toEqual([]);
 });
+
+test('Scrum mode widens the board (and stays aligned with the toolbar), Kanban keeps the narrower width', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
+
+  await page.goto(APP_URL);
+  await page.evaluate(() => {
+    const backdrop = document.getElementById('save-warning-backdrop');
+    if (backdrop) backdrop.style.display = 'none';
+  });
+  await page.setViewportSize({ width: 1600, height: 900 }); // wide enough that both caps are actually reachable
+
+  async function maxWidthOf(selector) {
+    return page.evaluate((sel) => parseInt(getComputedStyle(document.querySelector(sel)).maxWidth, 10), selector);
+  }
+
+  const kanbanBoardWidth = await maxWidthOf('.board');
+  const kanbanToolbarWidth = await maxWidthOf('.project-toolbar');
+  expect(kanbanBoardWidth).toBe(1160);
+  expect(kanbanToolbarWidth).toBe(1160);
+
+  await page.locator('.view-toggle-option', { hasText: 'Scrum' }).click();
+  const scrumBoardWidth = await maxWidthOf('.board');
+  const scrumToolbarWidth = await maxWidthOf('.project-toolbar');
+  expect(scrumBoardWidth).toBeGreaterThan(kanbanBoardWidth);
+  expect(scrumToolbarWidth).toBe(scrumBoardWidth); // stays aligned with the board, not left behind at Kanban's width
+
+  // Switching back to Kanban reverts both.
+  await page.locator('.view-toggle-option', { hasText: 'Kanban' }).click();
+  expect(await maxWidthOf('.board')).toBe(1160);
+  expect(await maxWidthOf('.project-toolbar')).toBe(1160);
+
+  expect(errors, 'no console/page errors checking Scrum/Kanban board width').toEqual([]);
+});
