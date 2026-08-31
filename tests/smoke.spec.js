@@ -5,6 +5,14 @@ const url = require('url');
 
 const APP_URL = url.pathToFileURL(path.resolve(__dirname, '../workhorse.html')).href;
 
+// Tasks are only ever created through the add-task modal now (issue #42) --
+// this is the one place every test goes through to create one.
+async function addTask(page, col, title) {
+  await page.locator('.add-task-btn[data-col="' + col + '"]').click();
+  await page.locator('#task-modal-title-input').fill(title);
+  await page.locator('#task-modal-submit').click();
+}
+
 test('loads with no console/page errors and the board renders', async ({ page }) => {
   const errors = [];
   page.on('pageerror', (err) => errors.push(err.message));
@@ -40,9 +48,7 @@ test('adding a task updates the column', async ({ page }) => {
     if (backdrop) backdrop.style.display = 'none';
   });
 
-  const input = page.locator('.add-input[data-col="todo"]');
-  await input.fill('CI smoke test task');
-  await input.press('Enter');
+  await addTask(page, 'todo', 'CI smoke test task');
 
   await expect(page.locator('#dropzone-todo .card')).toContainText('CI smoke test task');
   await expect(page.locator('[data-count="todo"]')).toHaveText('1');
@@ -65,9 +71,7 @@ test('Kanban and Scrum are independent pools; the toggle never moves data, kebab
   await expect(page.locator('.column[data-col="backlog"]')).toBeHidden();
   await expect(page.locator('.column[data-col="review"]')).toBeHidden();
 
-  const input = page.locator('.add-input[data-col="todo"]');
-  await input.fill('Kanban task');
-  await input.press('Enter');
+  await addTask(page, 'todo', 'Kanban task');
   await expect(page.locator('[data-count="todo"]')).toHaveText('1');
 
   // Switching views is a pure visibility change -- no confirm, no data move.
@@ -118,11 +122,8 @@ test('starting and completing a sprint moves items and records history', async (
   page.on('dialog', (d) => d.accept());
   await page.locator('.view-toggle-option', { hasText: 'Scrum' }).click();
 
-  const backlogInput = page.locator('.add-input[data-col="backlog"]');
-  await backlogInput.fill('Sprint task one');
-  await backlogInput.press('Enter');
-  await backlogInput.fill('Sprint task two');
-  await backlogInput.press('Enter');
+  await addTask(page, 'backlog', 'Sprint task one');
+  await addTask(page, 'backlog', 'Sprint task two');
   await expect(page.locator('[data-count="backlog"]')).toHaveText('2');
 
   await page.locator('#project-toolbar button', { hasText: 'Start Sprint' }).click();
@@ -176,11 +177,8 @@ test('story point estimates can be set, typed multi-digit, and cleared', async (
     if (backdrop) backdrop.style.display = 'none';
   });
 
-  const input = page.locator('.add-input[data-col="todo"]');
-  await input.fill('Task with an estimate');
-  await input.press('Enter');
-  await input.fill('Task with no estimate');
-  await input.press('Enter');
+  await addTask(page, 'todo', 'Task with an estimate');
+  await addTask(page, 'todo', 'Task with no estimate');
 
   const card = page.locator('.card', { hasText: 'Task with an estimate' });
   await card.hover();
@@ -226,11 +224,8 @@ test('burndown chart derives from completion dates: leaving Done un-completes an
   page.on('dialog', (d) => d.accept());
   await page.locator('.view-toggle-option', { hasText: 'Scrum' }).click();
 
-  const backlogInput = page.locator('.add-input[data-col="backlog"]');
-  await backlogInput.fill('Three point task');
-  await backlogInput.press('Enter');
-  await backlogInput.fill('Five point task');
-  await backlogInput.press('Enter');
+  await addTask(page, 'backlog', 'Three point task');
+  await addTask(page, 'backlog', 'Five point task');
 
   async function setPoints(taskText, value) {
     const card = page.locator('.card', { hasText: taskText });
@@ -418,9 +413,7 @@ test('a pre-pool-separation archived sprint (completedItems, no nested arrays) m
   // every render from this point on re-threw inside renderProjectToolbar(),
   // which meant renderBoard() never ran and the new sprint's tasks never
   // visually appeared in To do even though they were correctly in the data.
-  const backlogInput = page.locator('.add-input[data-col="backlog"]');
-  await backlogInput.fill('Brand new task');
-  await backlogInput.press('Enter');
+  await addTask(page, 'backlog', 'Brand new task');
   await page.locator('#project-toolbar button', { hasText: 'Start Sprint' }).click();
   await page.locator('#sprint-name-input').fill('Sprint 2');
   await page.locator('#sprint-start-input').fill('2026-08-24');
@@ -538,9 +531,7 @@ test('sprint can be edited, deleted (returning even Done tasks to Backlog), and 
   }
 
   // --- Edit ---
-  const backlogInput = page.locator('.add-input[data-col="backlog"]');
-  await backlogInput.fill('Task to delete-test');
-  await backlogInput.press('Enter');
+  await addTask(page, 'backlog', 'Task to delete-test');
   await startSprint('Sprint A', '2026-08-01', '2026-08-14', ['Task to delete-test']);
 
   await page.locator('#project-toolbar button', { hasText: 'Edit' }).click();
@@ -575,9 +566,7 @@ test('sprint can be edited, deleted (returning even Done tasks to Backlog), and 
   // --- History detail: complete a fresh sprint and view what finished ---
   await page.locator('#project-toolbar button', { hasText: 'Complete Sprint' }).click();
   await startSprint('Sprint B', '2026-09-01', '2026-09-14');
-  const newBacklogInput = page.locator('.add-input[data-col="backlog"]');
-  await newBacklogInput.fill('Second sprint task');
-  await newBacklogInput.press('Enter');
+  await addTask(page, 'backlog', 'Second sprint task');
   await page.locator('#dropzone-backlog .card', { hasText: 'Second sprint task' }).dragTo(page.locator('#dropzone-done'));
   await page.locator('#project-toolbar button', { hasText: 'Complete Sprint' }).click();
 
@@ -812,9 +801,7 @@ test('a card\'s creation date can be edited from the kebab menu, and can\'t be c
     if (backdrop) backdrop.style.display = 'none';
   });
 
-  const input = page.locator('.add-input[data-col="todo"]');
-  await input.fill('Task for creation date test');
-  await input.press('Enter');
+  await addTask(page, 'todo', 'Task for creation date test');
 
   const card = page.locator('.card', { hasText: 'Task for creation date test' });
   await card.hover();
@@ -864,10 +851,8 @@ test('Start Sprint\'s backlog checklist has a working Select all toggle', async 
   await expect(page.locator('.sprint-modal-empty')).toBeVisible();
   await page.locator('#sprint-modal-cancel').click();
 
-  const backlogInput = page.locator('.add-input[data-col="backlog"]');
   for (const text of ['Alpha task', 'Beta task', 'Gamma task']) {
-    await backlogInput.fill(text);
-    await backlogInput.press('Enter');
+    await addTask(page, 'backlog', text);
   }
 
   await page.locator('#project-toolbar button', { hasText: 'Start Sprint' }).click();
@@ -913,9 +898,7 @@ test('Kanban Done cards now track and show a completion date too, not just Scrum
     if (backdrop) backdrop.style.display = 'none';
   });
 
-  const input = page.locator('.add-input[data-col="todo"]');
-  await input.fill('Kanban done-date task');
-  await input.press('Enter');
+  await addTask(page, 'todo', 'Kanban done-date task');
 
   const card = page.locator('.card', { hasText: 'Kanban done-date task' });
   await expect(card.locator('.card-completed')).toBeHidden();
@@ -1055,24 +1038,20 @@ test('the "more detail" add-task modal creates a task with a title, description,
     if (backdrop) backdrop.style.display = 'none';
   });
 
-  // Typing inline, then opening the modal, carries the draft over into the
-  // Title field instead of losing it.
-  const input = page.locator('.add-input[data-col="todo"]');
-  await input.fill('Draft typed inline first');
-  await page.locator('.add-expand-btn[data-col="todo"]').click();
+  await page.locator('.add-task-btn[data-col="todo"]').click();
   await expect(page.locator('#task-modal-backdrop')).toBeVisible();
-  await expect(page.locator('#task-modal-title-input')).toHaveValue('Draft typed inline first');
+  await expect(page.locator('#task-modal-title-input')).toHaveValue('');
   await expect(page.locator('#task-modal-description-input')).toHaveValue('');
 
+  await page.locator('#task-modal-title-input').fill('A task with real detail');
   await page.locator('#task-modal-description-input').fill('* First bullet\n* Second bullet');
   await page.locator('#task-modal-deadline-input').fill('2026-12-25');
   await page.locator('#task-modal-points-input').fill('8');
   await page.locator('#task-modal-submit').click();
 
   await expect(page.locator('#task-modal-backdrop')).toBeHidden();
-  await expect(input).toHaveValue(''); // the inline draft is cleared, not left stale
 
-  const card = page.locator('.card', { hasText: 'Draft typed inline first' });
+  const card = page.locator('.card', { hasText: 'A task with real detail' });
   await expect(card.locator('.card-deadline')).toHaveText('due Dec 25');
   await expect(card.locator('.card-points')).toHaveText('8 pts');
 
@@ -1090,7 +1069,7 @@ test('the "more detail" add-task modal creates a task with a title, description,
   await expect(detailsToggle).toHaveText('Show details');
 
   // Submitting with no title is rejected rather than creating a blank task.
-  await page.locator('.add-expand-btn[data-col="todo"]').click();
+  await page.locator('.add-task-btn[data-col="todo"]').click();
   page.once('dialog', (d) => d.dismiss());
   await page.locator('#task-modal-submit').click();
   await expect(page.locator('#task-modal-backdrop')).toBeVisible(); // still open, nothing created
@@ -1116,9 +1095,7 @@ test('a single-line checkbox/bullet task (the common quick-capture shape) stays 
     if (backdrop) backdrop.style.display = 'none';
   });
 
-  const input = page.locator('.add-input[data-col="todo"]');
-  await input.fill('[] Buy milk');
-  await input.press('Enter');
+  await addTask(page, 'todo', '[] Buy milk');
 
   const card = page.locator('.card', { hasText: 'Buy milk' });
   await expect(card.locator('.card-details-toggle')).toHaveCount(0); // nothing to hide -- title is the whole card
@@ -1143,7 +1120,7 @@ test('the add-task modal is reachable in every column, both modes, including Bac
   await page.locator('.view-toggle-option', { hasText: 'Scrum' }).click();
 
   for (const col of ['backlog', 'todo', 'doing', 'review', 'done']) {
-    await page.locator('.add-expand-btn[data-col="' + col + '"]').click();
+    await page.locator('.add-task-btn[data-col="' + col + '"]').click();
     await expect(page.locator('#task-modal-backdrop')).toBeVisible();
     await page.locator('#task-modal-cancel').click();
     await expect(page.locator('#task-modal-backdrop')).toBeHidden();
@@ -1152,7 +1129,7 @@ test('the add-task modal is reachable in every column, both modes, including Bac
   // Mobile viewport: the modal must stay on-screen and usable, not clipped
   // or pushed out past the viewport edge.
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.locator('.add-expand-btn[data-col="backlog"]').click();
+  await page.locator('.add-task-btn[data-col="backlog"]').click();
   await expect(page.locator('#task-modal-backdrop')).toBeVisible();
   const box = await page.locator('.sprint-modal', { has: page.locator('#task-modal-title-input') }).boundingBox();
   expect(box.x).toBeGreaterThanOrEqual(0);

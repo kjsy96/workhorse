@@ -1181,9 +1181,8 @@
     touchDrag = null;
   }
 
-  // Shared by the quick-capture inline input below and the "more detail"
-  // modal, so there's exactly one place that knows how to actually create a
-  // task. Returns false (and creates nothing) if the column has nowhere to
+  // The only way to create a task -- called from the add-task modal's submit
+  // below. Returns false (and creates nothing) if the column has nowhere to
   // go right now -- e.g. a Scrum column other than Backlog with no active
   // sprint.
   function createTask(col, text, opts) {
@@ -1202,43 +1201,21 @@
     return true;
   }
 
-  document.querySelectorAll('.add-input').forEach(input => {
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        const text = input.value.trim();
-        if (!text) return;
-        if (!createTask(input.dataset.col, text, null)) return; // e.g. scrum view with no active sprint yet
-        input.value = '';
-        input.style.height = 'auto';
-        render();
-      }
-    });
-
-    input.addEventListener('input', () => {
-      input.style.height = 'auto';
-      input.style.height = input.scrollHeight + 'px';
-    });
-  });
-
-  // "More detail" modal -- same underlying createTask() as the quick-capture
-  // input above, just with separate Title/Description fields (stored as
-  // line 1 + the rest of item.text, same convention renderView() already
-  // uses to decide what's always-visible vs. hidden behind "Show details")
-  // and optional deadline/points set up front instead of only after the
-  // fact via the kebab menu.
+  // Add-task modal -- title/description (stored as line 1 + the rest of
+  // item.text, same convention renderView() already uses to decide what's
+  // always-visible vs. hidden behind "Show details") plus optional
+  // deadline/points, all set up front instead of only after the fact via
+  // the kebab menu.
   let taskModalCol = null;
 
-  function openTaskModal(col, prefillTitle) {
+  function openTaskModal(col) {
     taskModalCol = col;
-    const titleEl = document.getElementById('task-modal-title-input');
-    titleEl.value = prefillTitle || '';
+    document.getElementById('task-modal-title-input').value = '';
     document.getElementById('task-modal-description-input').value = '';
     document.getElementById('task-modal-deadline-input').value = '';
     document.getElementById('task-modal-points-input').value = '';
     document.getElementById('task-modal-backdrop').style.display = 'flex';
-    titleEl.focus();
-    titleEl.setSelectionRange(titleEl.value.length, titleEl.value.length); // cursor after any prefill, not selecting it
+    document.getElementById('task-modal-title-input').focus();
   }
 
   function closeTaskModal() {
@@ -1254,23 +1231,16 @@
     const deadline = document.getElementById('task-modal-deadline-input').value || null;
     const pointsVal = document.getElementById('task-modal-points-input').value;
     const points = pointsVal === '' ? null : Math.max(0, Math.round(Number(pointsVal)));
-    const col = taskModalCol;
-    if (!createTask(col, text, { deadline: deadline, points: points })) {
+    if (!createTask(taskModalCol, text, { deadline: deadline, points: points })) {
       alert('Start a sprint before adding tasks here.');
       return;
     }
     closeTaskModal();
-    const inlineInput = document.querySelector('.add-input[data-col="' + col + '"]');
-    if (inlineInput) { inlineInput.value = ''; inlineInput.style.height = 'auto'; }
     render();
   }
 
-  document.querySelectorAll('.add-expand-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const col = btn.dataset.col;
-      const inlineInput = document.querySelector('.add-input[data-col="' + col + '"]');
-      openTaskModal(col, inlineInput ? inlineInput.value : '');
-    });
+  document.querySelectorAll('.add-task-btn').forEach(btn => {
+    btn.addEventListener('click', () => openTaskModal(btn.dataset.col));
   });
 
   document.getElementById('task-modal-cancel').addEventListener('click', closeTaskModal);
@@ -1278,10 +1248,9 @@
   document.getElementById('task-modal-backdrop').addEventListener('click', (e) => {
     if (e.target.id === 'task-modal-backdrop') closeTaskModal();
   });
-  // Only the Title field submits on Enter, matching the inline add-input's
-  // own quick-capture convention -- the Description field is for multi-line
-  // detail, so Enter there is a plain newline, same as everywhere else
-  // multi-line task text is edited.
+  // Only the Title field submits on Enter -- the Description field is for
+  // multi-line detail, so Enter there is a plain newline, same as
+  // everywhere else multi-line task text is edited.
   document.getElementById('task-modal-title-input').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();

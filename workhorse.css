@@ -1267,55 +1267,25 @@
 
   .add-row {
     margin-bottom: 12px;
-    display: flex;
-    align-items: stretch;
-    gap: 6px;
   }
 
-  .add-expand-btn {
-    flex-shrink: 0;
-    width: 34px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px dashed var(--line);
-    background: transparent;
-    border-radius: 10px;
-    color: var(--ink-soft);
-    font-size: 16px;
-    line-height: 1;
-    cursor: pointer;
-    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
-  }
-
-  .add-expand-btn:hover {
-    border-color: var(--ink-soft);
-    border-style: solid;
-    color: var(--ink);
-    background: var(--paper);
-  }
-
-  .add-input {
+  .add-task-btn {
     width: 100%;
-    flex: 1;
-    min-width: 0;
     border: 1px dashed var(--line);
     background: transparent;
     border-radius: 10px;
     padding: 10px 12px;
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 13.5px;
-    color: var(--ink);
-    resize: none;
-    outline: none;
-    transition: border-color 0.15s ease, background 0.15s ease;
+    color: var(--ink-soft);
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
   }
 
-  .add-input::placeholder { color: var(--ink-soft); }
-
-  .add-input:focus {
+  .add-task-btn:hover {
     border-color: var(--ink-soft);
     border-style: solid;
+    color: var(--ink);
     background: var(--paper);
   }
 
