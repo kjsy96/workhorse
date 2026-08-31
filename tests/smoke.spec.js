@@ -729,6 +729,78 @@ test('past sprints can be reopened (blocked when one is already active) or delet
   expect(errors, 'no console/page errors across reopen/blocked-reopen/delete flows').toEqual([]);
 });
 
+test('sprint date displays show the year only when it differs from the current year', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
+
+  await page.goto(APP_URL);
+  await page.evaluate(() => {
+    const backdrop = document.getElementById('save-warning-backdrop');
+    if (backdrop) backdrop.style.display = 'none';
+  });
+  await page.locator('.view-toggle-option', { hasText: 'Scrum' }).click();
+
+  // Spans a year boundary but stays well under the long-span warning
+  // threshold, so no confirm() dialog is involved here.
+  await page.locator('#project-toolbar button', { hasText: 'Start Sprint' }).click();
+  await page.locator('#sprint-name-input').fill('Year Boundary Sprint');
+  await page.locator('#sprint-start-input').fill('2025-12-28');
+  await page.locator('#sprint-end-input').fill('2026-01-04');
+  await page.locator('#sprint-modal-submit').click();
+
+  // Current year (2026, per the fixed system clock this app runs under in
+  // this repo's dev/test environment) stays year-less; the off-year start
+  // date shows its year so a typo like this can't hide in the UI again.
+  await expect(page.locator('.sprint-info-dates')).toHaveText('Dec 28, 2025–Jan 4');
+
+  expect(errors, 'no console/page errors checking sprint date year display').toEqual([]);
+});
+
+test('starting or editing a sprint with an implausibly long date range warns before proceeding', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
+
+  await page.goto(APP_URL);
+  await page.evaluate(() => {
+    const backdrop = document.getElementById('save-warning-backdrop');
+    if (backdrop) backdrop.style.display = 'none';
+  });
+  await page.locator('.view-toggle-option', { hasText: 'Scrum' }).click();
+
+  await page.locator('#project-toolbar button', { hasText: 'Start Sprint' }).click();
+  await page.locator('#sprint-name-input').fill('Way Too Long Sprint');
+  await page.locator('#sprint-start-input').fill('2026-01-01');
+  await page.locator('#sprint-end-input').fill('2026-06-01'); // 151 days
+
+  // Dismissing the warning leaves the modal open and nothing gets created.
+  let dialogMessage = '';
+  page.once('dialog', (d) => { dialogMessage = d.message(); d.dismiss(); });
+  await page.locator('#sprint-modal-submit').click();
+  expect(dialogMessage).toContain('151 days');
+  await expect(page.locator('#sprint-modal-backdrop')).toBeVisible();
+  await expect(page.locator('#project-toolbar button', { hasText: 'Start Sprint' })).toBeVisible();
+
+  // Accepting it proceeds as normal.
+  page.once('dialog', (d) => d.accept());
+  await page.locator('#sprint-modal-submit').click();
+  await expect(page.locator('#sprint-modal-backdrop')).toBeHidden();
+  await expect(page.locator('.sprint-info-name')).toHaveText('Way Too Long Sprint');
+
+  // The same guard applies when editing an active sprint's dates, not just
+  // on initial creation.
+  await page.locator('#project-toolbar button', { hasText: 'Edit' }).click();
+  await page.locator('#sprint-end-input').fill('2027-01-01');
+  page.once('dialog', (d) => d.dismiss());
+  await page.locator('#sprint-modal-submit').click();
+  await expect(page.locator('#sprint-modal-backdrop')).toBeVisible();
+  await expect(page.locator('.sprint-info-name')).toHaveText('Way Too Long Sprint'); // unchanged so far
+  await page.locator('#sprint-modal-cancel').click();
+
+  expect(errors, 'no console/page errors around the long-sprint-span warning').toEqual([]);
+});
+
 test('a card\'s creation date can be edited from the kebab menu, and can\'t be cleared', async ({ page }) => {
   const errors = [];
   page.on('pageerror', (err) => errors.push(err.message));

@@ -1,3 +1,17 @@
+  // Sprint dates specifically show the year whenever it isn't the current
+  // one. A several-year date-entry typo (e.g. 2021 instead of 2026) used to
+  // be completely invisible anywhere in the UI -- formatDeadline() (used
+  // for item deadlines/completed-on badges, which stay in their existing
+  // year-less short form) always drops the year -- and that invisibility
+  // was the actual root cause behind a burndown chart that looked "stuck"
+  // near the top instead of trending down (see issue #31).
+  function formatSprintDate(dateStr) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const opts = { month: 'short', day: 'numeric' };
+    if (y !== new Date().getFullYear()) opts.year = 'numeric';
+    return new Date(y, m - 1, d).toLocaleDateString(undefined, opts);
+  }
+
   function renderProjectToolbar() {
     const proj = activeProject();
     const toolbar = document.getElementById('project-toolbar');
@@ -41,7 +55,7 @@
 
       const datesEl = document.createElement('span');
       datesEl.className = 'sprint-info-dates';
-      datesEl.textContent = formatDeadline(proj.activeSprint.startDate) + '–' + formatDeadline(proj.activeSprint.endDate);
+      datesEl.textContent = formatSprintDate(proj.activeSprint.startDate) + '–' + formatSprintDate(proj.activeSprint.endDate);
       info.appendChild(datesEl);
 
       toolbar.appendChild(info);
@@ -102,7 +116,7 @@
     proj.sprints.slice().reverse().forEach(s => {
       const row = document.createElement('div');
       row.className = 'sprint-history-row';
-      row.textContent = s.name + ' (' + formatDeadline(s.startDate) + '–' + formatDeadline(s.endDate) + ')' + (s.goal ? ' — ' + s.goal : '');
+      row.textContent = s.name + ' (' + formatSprintDate(s.startDate) + '–' + formatSprintDate(s.endDate) + ')' + (s.goal ? ' — ' + s.goal : '');
       row.addEventListener('click', () => openSprintDetailModal(proj, s));
       body.appendChild(row);
     });
@@ -129,7 +143,7 @@
   function openSprintDetailModal(proj, sprint) {
     document.getElementById('sprint-detail-modal-title').textContent = sprint.name;
     document.getElementById('sprint-detail-modal-meta').textContent =
-      formatDeadline(sprint.startDate) + '–' + formatDeadline(sprint.endDate) + (sprint.goal ? ' — ' + sprint.goal : '');
+      formatSprintDate(sprint.startDate) + '–' + formatSprintDate(sprint.endDate) + (sprint.goal ? ' — ' + sprint.goal : '');
 
     const body = document.getElementById('sprint-detail-modal-body');
     body.innerHTML = '';
@@ -447,6 +461,20 @@
     if (!startDate || !endDate) { alert('Pick a start and end date.'); return; }
     if (endDate < startDate) { alert('End date must be on or after the start date.'); return; }
 
+    // A sprint spanning this long is almost always a date-entry typo (e.g. a
+    // wrong year), not an intentional sprint length -- warn rather than
+    // block, since it's still technically valid data and the app has no
+    // business enforcing a "real" sprint length.
+    const spanDays = dateToDayNum(endDate) - dateToDayNum(startDate);
+    const SPRINT_LENGTH_WARN_DAYS = 90;
+    if (spanDays > SPRINT_LENGTH_WARN_DAYS) {
+      const proceed = confirm(
+        'This sprint spans ' + spanDays + ' days (' + formatSprintDate(startDate) + '–' + formatSprintDate(endDate) + '). ' +
+        'Most sprints run 1–4 weeks — double check the dates before continuing.\n\nContinue anyway?'
+      );
+      if (!proceed) return;
+    }
+
     if (sprintModalMode === 'edit') {
       closeStartSprintModal();
       pushHistory();
@@ -568,8 +596,8 @@
         '<path d="' + idealPath + '" class="burndown-ideal" />' +
         '<path d="' + actualPath + '" class="burndown-actual" />' +
         dots +
-        '<text x="' + PAD + '" y="' + (H - 10) + '" class="burndown-label">' + formatDeadline(sprint.startDate) + '</text>' +
-        '<text x="' + (W - PAD) + '" y="' + (H - 10) + '" class="burndown-label" text-anchor="end">' + formatDeadline(sprint.endDate) + '</text>' +
+        '<text x="' + PAD + '" y="' + (H - 10) + '" class="burndown-label">' + formatSprintDate(sprint.startDate) + '</text>' +
+        '<text x="' + (W - PAD) + '" y="' + (H - 10) + '" class="burndown-label" text-anchor="end">' + formatSprintDate(sprint.endDate) + '</text>' +
         '<text x="' + (PAD - 8) + '" y="' + (PAD + 4) + '" class="burndown-label" text-anchor="end">' + total + '</text>' +
         '<text x="' + (PAD - 8) + '" y="' + (H - PAD + 4) + '" class="burndown-label" text-anchor="end">0</text>' +
       '</svg>';
