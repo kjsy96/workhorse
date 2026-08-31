@@ -728,3 +728,59 @@ test('past sprints can be reopened (blocked when one is already active) or delet
 
   expect(errors, 'no console/page errors across reopen/blocked-reopen/delete flows').toEqual([]);
 });
+
+test('Start Sprint\'s backlog checklist has a working Select all toggle', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
+
+  await page.goto(APP_URL);
+  await page.evaluate(() => {
+    const backdrop = document.getElementById('save-warning-backdrop');
+    if (backdrop) backdrop.style.display = 'none';
+  });
+  await page.locator('.view-toggle-option', { hasText: 'Scrum' }).click();
+
+  // Empty backlog: no Select all control, just the existing empty-state message.
+  await page.locator('#project-toolbar button', { hasText: 'Start Sprint' }).click();
+  await expect(page.locator('#sprint-modal-select-all')).toBeHidden();
+  await expect(page.locator('.sprint-modal-empty')).toBeVisible();
+  await page.locator('#sprint-modal-cancel').click();
+
+  const backlogInput = page.locator('.add-input[data-col="backlog"]');
+  for (const text of ['Alpha task', 'Beta task', 'Gamma task']) {
+    await backlogInput.fill(text);
+    await backlogInput.press('Enter');
+  }
+
+  await page.locator('#project-toolbar button', { hasText: 'Start Sprint' }).click();
+  const checklist = page.locator('#sprint-modal-checklist');
+  const boxes = checklist.locator('input[type="checkbox"]');
+  const selectAllBtn = page.locator('#sprint-modal-select-all');
+  await expect(selectAllBtn).toBeVisible();
+  await expect(selectAllBtn).toHaveText('Select all');
+  for (const box of await boxes.all()) await expect(box).not.toBeChecked();
+
+  // Select all: every box checks, label flips to let it also act as "deselect all".
+  await selectAllBtn.click();
+  for (const box of await boxes.all()) await expect(box).toBeChecked();
+  await expect(selectAllBtn).toHaveText('Deselect all');
+
+  // Manually unchecking one afterward isn't fought by anything.
+  await checklist.locator('.checklist-row', { hasText: 'Beta task' }).locator('input[type="checkbox"]').uncheck();
+  await expect(checklist.locator('.checklist-row', { hasText: 'Beta task' }).locator('input[type="checkbox"]')).not.toBeChecked();
+
+  // Clicking again with a partial selection re-selects everything, including Beta.
+  await selectAllBtn.click();
+  for (const box of await boxes.all()) await expect(box).toBeChecked();
+  await expect(selectAllBtn).toHaveText('Deselect all');
+
+  // Clicking once more with everything checked deselects everything.
+  await selectAllBtn.click();
+  for (const box of await boxes.all()) await expect(box).not.toBeChecked();
+  await expect(selectAllBtn).toHaveText('Select all');
+
+  await page.locator('#sprint-modal-cancel').click();
+
+  expect(errors, 'no console/page errors exercising the Select all toggle').toEqual([]);
+});

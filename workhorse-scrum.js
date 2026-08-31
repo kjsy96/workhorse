@@ -400,6 +400,19 @@
       checklist.appendChild(row);
     });
 
+    // Rebuilt fresh on every open (checklist rows above are too), so a plain
+    // .onclick reassignment is enough -- no risk of stacking duplicate
+    // listeners across repeated opens.
+    const selectAllBtn = document.getElementById('sprint-modal-select-all');
+    selectAllBtn.style.display = proj.backlog.length ? '' : 'none';
+    selectAllBtn.textContent = 'Select all';
+    selectAllBtn.onclick = () => {
+      const boxes = Array.prototype.slice.call(checklist.querySelectorAll('input[type="checkbox"]'));
+      const allChecked = boxes.length > 0 && boxes.every(cb => cb.checked);
+      boxes.forEach(cb => { cb.checked = !allChecked; });
+      selectAllBtn.textContent = allChecked ? 'Select all' : 'Deselect all';
+    };
+
     document.getElementById('sprint-modal-backdrop').style.display = 'flex';
     document.getElementById('sprint-name-input').focus();
   }
