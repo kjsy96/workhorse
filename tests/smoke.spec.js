@@ -729,6 +729,51 @@ test('past sprints can be reopened (blocked when one is already active) or delet
   expect(errors, 'no console/page errors across reopen/blocked-reopen/delete flows').toEqual([]);
 });
 
+test('a card\'s creation date can be edited from the kebab menu, and can\'t be cleared', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
+
+  await page.goto(APP_URL);
+  await page.evaluate(() => {
+    const backdrop = document.getElementById('save-warning-backdrop');
+    if (backdrop) backdrop.style.display = 'none';
+  });
+
+  const input = page.locator('.add-input[data-col="todo"]');
+  await input.fill('Task for creation date test');
+  await input.press('Enter');
+
+  const card = page.locator('.card', { hasText: 'Task for creation date test' });
+  await card.hover();
+  await card.locator('.card-menu-btn').click();
+  const createdInput = card.locator('.card-menu-deadline-row', { hasText: 'Created on' }).locator('input[type="date"]');
+
+  const today = await page.evaluate(() => todayDateStr());
+  await expect(createdInput).toHaveValue(today); // freshly created -- defaults to today
+
+  await createdInput.fill('2026-01-05');
+  await createdInput.blur();
+  await expect(card.locator('.card-date')).toHaveText('Jan 5');
+
+  await page.locator('#undo-btn').click();
+  await expect(card.locator('.card-date')).not.toHaveText('Jan 5');
+  await page.locator('#redo-btn').click();
+  await expect(card.locator('.card-date')).toHaveText('Jan 5');
+
+  // Clearing the field (e.g. an accidental full-select-and-delete) must not
+  // leave the card with no creation date -- reverts to the last valid value.
+  await card.hover();
+  await card.locator('.card-menu-btn').click();
+  const createdInput2 = card.locator('.card-menu-deadline-row', { hasText: 'Created on' }).locator('input[type="date"]');
+  await createdInput2.fill('');
+  await createdInput2.blur();
+  await expect(createdInput2).toHaveValue('2026-01-05');
+  await expect(card.locator('.card-date')).toHaveText('Jan 5');
+
+  expect(errors, 'no console/page errors editing/clearing the creation date').toEqual([]);
+});
+
 test('Start Sprint\'s backlog checklist has a working Select all toggle', async ({ page }) => {
   const errors = [];
   page.on('pageerror', (err) => errors.push(err.message));

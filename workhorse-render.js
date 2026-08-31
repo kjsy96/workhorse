@@ -4,6 +4,15 @@
     return d.toLocaleDateString(undefined, opts);
   }
 
+  // Converts a creation timestamp to the 'YYYY-MM-DD' shape a date <input>
+  // needs, using local date parts (matches formatDate()/todayDateStr()'s own
+  // local-time reading of a timestamp, so the value shown in the picker
+  // always agrees with the value already shown in the footer).
+  function dateStrFromTimestamp(ts) {
+    const d = new Date(ts);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+
   function formatDeadline(dateStr) {
     const [y, m, d] = dateStr.split('-').map(Number);
     const dt = new Date(y, m - 1, d);
@@ -420,6 +429,25 @@
         });
         dropdown.appendChild(editItem);
 
+        const createdDivider = document.createElement('div');
+        createdDivider.className = 'card-menu-divider';
+        dropdown.appendChild(createdDivider);
+
+        const createdRow = document.createElement('div');
+        createdRow.className = 'card-menu-deadline-row';
+        const createdLabel = document.createElement('span');
+        createdLabel.className = 'card-menu-label';
+        createdLabel.textContent = 'Created on';
+        createdRow.appendChild(createdLabel);
+        const createdInput = document.createElement('input');
+        createdInput.type = 'date';
+        createdInput.className = 'card-menu-date-input';
+        createdInput.value = dateStrFromTimestamp(item.created);
+        createdInput.addEventListener('click', (e) => e.stopPropagation());
+        createdInput.addEventListener('mousedown', (e) => e.stopPropagation());
+        createdRow.appendChild(createdInput);
+        dropdown.appendChild(createdRow);
+
         const deadlineDivider = document.createElement('div');
         deadlineDivider.className = 'card-menu-divider';
         dropdown.appendChild(deadlineDivider);
@@ -642,6 +670,28 @@
           }
         }
         refreshPointsUI();
+
+        let createdHistoryPushed = false;
+        createdInput.addEventListener('focus', () => {
+          createdHistoryPushed = false;
+        });
+        createdInput.addEventListener('change', (e) => {
+          const val = e.target.value;
+          if (!val) { createdInput.value = dateStrFromTimestamp(item.created); return; } // never allow clearing -- every item has a creation date
+          if (!createdHistoryPushed) {
+            pushHistory();
+            createdHistoryPushed = true;
+          }
+          // item.created is a timestamp, but only ever read back out through
+          // formatDate()/dateStrFromTimestamp(), both local-time -- build the
+          // new timestamp from local date parts too (not `new Date(val)`,
+          // which parses a bare 'YYYY-MM-DD' as UTC midnight and would
+          // silently shift a day in negative-UTC timezones).
+          const [y, m, d] = val.split('-').map(Number);
+          item.created = new Date(y, m - 1, d).getTime();
+          date.textContent = formatDate(item.created);
+          save(state);
+        });
 
         let deadlineHistoryPushed = false;
         deadlineInput.addEventListener('focus', () => {
