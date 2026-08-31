@@ -1015,7 +1015,7 @@ test('the add-task modal\'s Description field is themed in dark mode, not the br
     document.getElementById('save-warning-backdrop').style.display = 'none';
     document.documentElement.setAttribute('data-theme', 'dark');
   });
-  await page.locator('.add-expand-btn[data-col="todo"]').click();
+  await page.locator('.add-task-btn[data-col="todo"]').click();
 
   const desc = page.locator('#task-modal-description-input');
   const bg = await desc.evaluate(el => getComputedStyle(el).backgroundColor);
