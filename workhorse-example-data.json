@@ -1,89 +1,281 @@
 {
   "projects": [
     {
+      "id": "proj-sprint",
+      "name": "Platform Rebuild",
+      "mode": "scrum",
+      "todo": [],
+      "doing": [],
+      "done": [],
+      "backlog": [
+        {
+          "id": "sprint-bl1",
+          "text": "Fix the CI cache so it actually speeds up builds",
+          "created": 1787414400000,
+          "deadline": null,
+          "points": 5,
+          "completedAt": null
+        },
+        {
+          "id": "sprint-bl2",
+          "text": "Design empty states for the dashboard",
+          "created": 1787500800000,
+          "deadline": null,
+          "points": 2,
+          "completedAt": null
+        },
+        {
+          "id": "sprint-bl3",
+          "text": "Decide, once and for all, if we're doing microservices",
+          "created": 1787587200000,
+          "deadline": null,
+          "points": null,
+          "completedAt": null
+        }
+      ],
+      "sprints": [
+        {
+          "id": "sprint-13",
+          "name": "Sprint 13",
+          "goal": "Stabilize the platform ahead of the Q4 push",
+          "startDate": "2026-08-07",
+          "endDate": "2026-08-21",
+          "unit": "points",
+          "startingTotal": 29,
+          "todo": [],
+          "doing": [],
+          "review": [],
+          "done": [
+            {
+              "id": "s13-d1",
+              "text": "Migrate staging environment to new infrastructure",
+              "created": 1786032000000,
+              "deadline": null,
+              "points": 5,
+              "completedAt": "2026-08-09"
+            },
+            {
+              "id": "s13-d2",
+              "text": "Fix login bug affecting SSO users",
+              "created": 1786118400000,
+              "deadline": null,
+              "points": 8,
+              "completedAt": "2026-08-12"
+            },
+            {
+              "id": "s13-d3",
+              "text": "Retire the reporting spreadsheet everyone still quietly uses",
+              "created": 1786204800000,
+              "deadline": null,
+              "points": 3,
+              "completedAt": "2026-08-15"
+            },
+            {
+              "id": "s13-d4",
+              "text": "Rewrite unclear API error messages",
+              "created": 1786291200000,
+              "deadline": null,
+              "points": 5,
+              "completedAt": "2026-08-18"
+            },
+            {
+              "id": "s13-d5",
+              "text": "Close out the backlog ticket open since last year",
+              "created": 1786377600000,
+              "deadline": null,
+              "points": 3,
+              "completedAt": "2026-08-20"
+            }
+          ],
+          "completedAt": 1787241600000
+        }
+      ],
+      "activeSprint": {
+        "id": "sprint-14",
+        "name": "Sprint 14",
+        "goal": "Ship the notification rework and clean up the API surface",
+        "startDate": "2026-08-21",
+        "endDate": "2026-09-04",
+        "unit": "points",
+        "startingTotal": 39,
+        "todo": [
+          {
+            "id": "s14-t1",
+            "text": "Add rate limiting to the public API",
+            "created": 1787241600000,
+            "deadline": null,
+            "points": 5,
+            "completedAt": null
+          },
+          {
+            "id": "s14-t2",
+            "text": "Write the migration runbook",
+            "created": 1787241600000,
+            "deadline": null,
+            "points": 3,
+            "completedAt": null
+          }
+        ],
+        "doing": [
+          {
+            "id": "s14-do1",
+            "text": "Refactor the notification service\n* Stop duplicate sends on retry\n* Fix the mute setting bug",
+            "created": 1787241600000,
+            "deadline": "2026-09-02",
+            "points": 8,
+            "completedAt": null
+          },
+          {
+            "id": "s14-do2",
+            "text": "Update Storybook components",
+            "created": 1787328000000,
+            "deadline": null,
+            "points": 2,
+            "completedAt": null
+          }
+        ],
+        "review": [
+          {
+            "id": "s14-r1",
+            "text": "Pagination bug fix — in QA",
+            "created": 1787241600000,
+            "deadline": null,
+            "points": 3,
+            "completedAt": null
+          }
+        ],
+        "done": [
+          {
+            "id": "s14-d1",
+            "text": "Migrate auth service to the new provider",
+            "created": 1787241600000,
+            "deadline": null,
+            "points": 5,
+            "completedAt": "2026-08-22"
+          },
+          {
+            "id": "s14-d2",
+            "text": "Fix the flaky integration test",
+            "created": 1787328000000,
+            "deadline": null,
+            "points": 3,
+            "completedAt": "2026-08-24"
+          },
+          {
+            "id": "s14-d3",
+            "text": "Rewrite onboarding checklist copy\n[x] Get sign-off from PM\n[x] Get sign-off from design",
+            "created": 1787328000000,
+            "deadline": null,
+            "points": 2,
+            "completedAt": "2026-08-26"
+          },
+          {
+            "id": "s14-d4",
+            "text": "Deprecate the unused /v1/legacy-export endpoint",
+            "created": 1787414400000,
+            "deadline": null,
+            "points": 3,
+            "completedAt": "2026-08-28"
+          },
+          {
+            "id": "s14-d5",
+            "text": "Closed \"investigate slow query\" — turns out it was fine",
+            "created": 1787414400000,
+            "deadline": null,
+            "points": 5,
+            "completedAt": "2026-08-30"
+          }
+        ]
+      }
+    },
+    {
       "id": "proj-launch",
       "name": "Product Launch",
+      "mode": "kanban",
+      "backlog": [],
+      "sprints": [],
+      "activeSprint": null,
       "todo": [
         {
           "id": "launch-t1",
           "text": "Convince engineering that \"quick fix\" isn't a technical term",
-          "created": 1784332800000,
+          "created": 1787414400000,
           "deadline": null
         },
         {
           "id": "launch-t2",
-          "text": "Rewrite the risk register before it becomes historical fiction\n[] Identify top 5 risks\n[] Assign owners who will definitely not update it\n[] Schedule a review nobody will attend",
-          "created": 1784246400000,
-          "deadline": "2026-07-25"
+          "text": "Update the risk register\n[] Identify top 5 risks\n[] Assign owners\n[] Schedule a review",
+          "created": 1787328000000,
+          "deadline": "2026-09-10"
         },
         {
           "id": "launch-t3",
-          "text": "Reply to the email thread that hit 47 replies since Tuesday",
-          "created": 1784505600000,
-          "deadline": "2026-07-18"
+          "text": "Reply to the client email thread",
+          "created": 1787587200000,
+          "deadline": "2026-09-02"
         }
       ],
       "doing": [
         {
           "id": "launch-d1",
-          "text": "Draft Q3 roadmap slides\n* Pull metrics from last quarter\n* Get budget sign-off from Finance\n* Pretend the timeline is realistic",
-          "created": 1783987200000,
-          "deadline": "2026-08-01"
+          "text": "Draft Q4 roadmap slides\n* Pull metrics from last quarter\n* Get budget sign-off from Finance\n* Confirm timeline with engineering",
+          "created": 1787068800000,
+          "deadline": "2026-09-15"
         },
         {
           "id": "mrxgeomest3r1",
           "text": "notes:\nLorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.",
-          "created": 1784807675942,
+          "created": 1787846400000,
           "deadline": null
         },
         {
           "id": "launch-d2",
-          "text": "Negotiate scope with the client who wants \"just one more feature\"",
-          "created": 1784160000000,
+          "text": "Negotiate scope with the client",
+          "created": 1787241600000,
           "deadline": null
         }
       ],
       "done": [
         {
           "id": "launch-done1",
-          "text": "Kickoff meeting — survived without a single \"per my last email\"",
-          "created": 1783296000000,
+          "text": "Kickoff meeting completed",
+          "created": 1786377600000,
           "deadline": null
         },
         {
           "id": "launch-done2",
           "text": "Finalized project charter",
-          "created": 1783468800000,
+          "created": 1786550400000,
           "deadline": null
         },
         {
           "id": "launch-done3",
-          "text": "Onboarded new designer\n[x] Laptop requested\n[x] Slack added\n[x] Survived the 45-minute onboarding video",
-          "created": 1783555200000,
+          "text": "Onboarded new designer\n[x] Laptop requested\n[x] Slack added\n[x] Completed onboarding training",
+          "created": 1786636800000,
           "deadline": null
         },
         {
           "id": "launch-done4",
-          "text": "Ran the retro — actually got useful feedback this time",
-          "created": 1783641600000,
+          "text": "Ran the sprint retro",
+          "created": 1786723200000,
           "deadline": null
         },
         {
           "id": "launch-done5",
           "text": "Closed out Sprint 12",
-          "created": 1783728000000,
+          "created": 1786809600000,
           "deadline": null
         },
         {
           "id": "launch-done6",
-          "text": "Sent the status report nobody reads",
-          "created": 1784073600000,
+          "text": "Sent the status report",
+          "created": 1787155200000,
           "deadline": null
         },
         {
           "id": "launch-done7",
           "text": "Notes from the all-hands:\nLeadership spent the first twenty minutes celebrating a metric that quietly went back down the following week, which is generally how these things go, but morale was high so nobody mentioned it. The main takeaway was that the roadmap is not changing, except for the three things that are changing, which apparently do not count as changes because they were always going to happen eventually, just maybe not this quarter, and definitely not in the order we originally planned, but the spirit of the plan remains intact and that is what matters most going forward.\nQ&A ran long because someone asked about the reorg and got an answer that used the word \"synergy\" four times without actually saying anything, so we scheduled a follow-up meeting to clarify the follow-up meeting from last month, and honestly at this point the calendar invite has more information in it than the meeting itself, but at least the snacks were genuinely good, so overall a solid use of an hour.",
-          "created": 1784246400000,
+          "created": 1787328000000,
           "deadline": null
         }
       ]
@@ -91,31 +283,47 @@
     {
       "id": "proj-ops",
       "name": "Team Ops",
+      "mode": "kanban",
+      "backlog": [],
+      "sprints": [],
+      "activeSprint": null,
       "todo": [
         {
           "id": "ops-t1",
-          "text": "Order more coffee before the team unionizes over it",
-          "created": 1784505600000,
+          "text": "Order more coffee for the office",
+          "created": 1787587200000,
+          "deadline": null
+        },
+        {
+          "id": "ops-t2",
+          "text": "Find a new all-hands time that works for everyone",
+          "created": 1787673600000,
           "deadline": null
         }
       ],
-      "doing": [],
+      "doing": [
+        {
+          "id": "ops-doing1",
+          "text": "Update the onboarding doc",
+          "created": 1787760000000,
+          "deadline": null
+        }
+      ],
       "done": [
         {
           "id": "ops-done1",
-          "text": "Renewed the Zoom license (again)",
-          "created": 1783555200000,
+          "text": "Renewed the Zoom license",
+          "created": 1786636800000,
+          "deadline": null
+        },
+        {
+          "id": "ops-done2",
+          "text": "Replaced the broken standing desk",
+          "created": 1787068800000,
           "deadline": null
         }
       ]
-    },
-    {
-      "id": "mrxgbdlyud999",
-      "name": "New Project",
-      "todo": [],
-      "doing": [],
-      "done": []
     }
   ],
-  "activeProjectId": "proj-launch"
+  "activeProjectId": "proj-sprint"
 }

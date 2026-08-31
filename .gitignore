@@ -6,6 +6,9 @@ Archive/kanban-data - Copy.json
 # Local Claude Code settings (machine-specific, not shared project config)
 .claude/
 
+# Marketing screenshots for LinkedIn etc. - not project content
+linkedin-screenshots/
+
 # CI tooling (Playwright) - node_modules and test artifacts, not the app itself
 node_modules/
 test-results/
