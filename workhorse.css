@@ -286,6 +286,10 @@
     font-family: 'IBM Plex Sans', sans-serif;
     resize: vertical;
     min-height: 90px;
+    color: var(--ink);
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 6px;
   }
 
   .sprint-modal-dates {

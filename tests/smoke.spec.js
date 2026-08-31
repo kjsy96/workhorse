@@ -1022,6 +1022,28 @@ test('Scrum mode widens the board (and stays aligned with the toolbar), Kanban k
   expect(errors, 'no console/page errors checking Scrum/Kanban board width').toEqual([]);
 });
 
+test('the add-task modal\'s Description field is themed in dark mode, not the browser default white', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
+
+  await page.goto(APP_URL);
+  await page.evaluate(() => {
+    document.getElementById('save-warning-backdrop').style.display = 'none';
+    document.documentElement.setAttribute('data-theme', 'dark');
+  });
+  await page.locator('.add-expand-btn[data-col="todo"]').click();
+
+  const desc = page.locator('#task-modal-description-input');
+  const bg = await desc.evaluate(el => getComputedStyle(el).backgroundColor);
+  expect(bg).not.toBe('rgb(255, 255, 255)');
+  // Matches the themed dark background every other modal input already uses.
+  const titleBg = await page.locator('#task-modal-title-input').evaluate(el => getComputedStyle(el).backgroundColor);
+  expect(bg).toBe(titleBg);
+
+  expect(errors, 'no console/page errors checking the Description field\'s dark-mode styling').toEqual([]);
+});
+
 test('the "more detail" add-task modal creates a task with a title, description, deadline/points -- the description stays hidden until expanded', async ({ page }) => {
   const errors = [];
   page.on('pageerror', (err) => errors.push(err.message));
