@@ -1156,6 +1156,16 @@
     padding: 2px 8px;
   }
 
+  .card-completed {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    color: var(--done);
+    background: var(--done-bg);
+    border-radius: 20px;
+    padding: 2px 8px;
+    white-space: nowrap;
+  }
+
   .card-list-view {
     font-size: 14.5px;
     line-height: 1.5;

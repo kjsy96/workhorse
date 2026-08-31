@@ -901,3 +901,88 @@ test('Start Sprint\'s backlog checklist has a working Select all toggle', async 
 
   expect(errors, 'no console/page errors exercising the Select all toggle').toEqual([]);
 });
+
+test('Kanban Done cards now track and show a completion date too, not just Scrum', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
+
+  await page.goto(APP_URL);
+  await page.evaluate(() => {
+    const backdrop = document.getElementById('save-warning-backdrop');
+    if (backdrop) backdrop.style.display = 'none';
+  });
+
+  const input = page.locator('.add-input[data-col="todo"]');
+  await input.fill('Kanban done-date task');
+  await input.press('Enter');
+
+  const card = page.locator('.card', { hasText: 'Kanban done-date task' });
+  await expect(card.locator('.card-completed')).toBeHidden();
+
+  // Before reaching Done, the kebab menu has no "Completed on" row at all.
+  await card.hover();
+  await card.locator('.card-menu-btn').click();
+  await expect(card.locator('.card-menu-deadline-row', { hasText: 'Completed on' })).toBeHidden();
+  await page.keyboard.press('Escape');
+
+  const today = await page.evaluate(() => todayDateStr());
+  await page.locator('#dropzone-todo .card', { hasText: 'Kanban done-date task' }).dragTo(page.locator('#dropzone-done'));
+  await expect(card.locator('.card-completed')).toBeVisible();
+  let completedAt = await page.evaluate(() =>
+    activeProject().done.find(i => i.text === 'Kanban done-date task').completedAt);
+  expect(completedAt).toBe(today);
+
+  // Backdate it via the now-visible "Completed on" field; the footer badge follows.
+  await card.hover();
+  await card.locator('.card-menu-btn').click();
+  const completedInput = card.locator('.card-menu-deadline-row', { hasText: 'Completed on' }).locator('input[type="date"]');
+  await expect(completedInput).toBeVisible();
+  await completedInput.fill('2026-02-14');
+  await completedInput.blur();
+  await expect(card.locator('.card-completed')).toHaveText('done Feb 14');
+
+  // Leaving Done clears it, mirroring the existing Scrum behavior.
+  await page.keyboard.press('Escape');
+  await page.locator('#dropzone-done .card', { hasText: 'Kanban done-date task' }).dragTo(page.locator('#dropzone-todo'));
+  await expect(card.locator('.card-completed')).toBeHidden();
+  completedAt = await page.evaluate(() =>
+    activeProject().todo.find(i => i.text === 'Kanban done-date task').completedAt);
+  expect(completedAt).toBeNull();
+
+  expect(errors, 'no console/page errors around Kanban completion-date tracking').toEqual([]);
+});
+
+test('pre-issue-#32 Kanban Done items with no completedAt get backfilled on load', async ({ page }) => {
+  const errors = [];
+
+  await page.goto(APP_URL);
+  await page.evaluate(() => {
+    const state = {
+      projects: [{
+        id: 'proj1', name: 'Legacy Kanban Project', mode: 'kanban',
+        todo: [], doing: [],
+        done: [{ id: 'd1', text: 'Old finished kanban task', created: Date.now(), deadline: null, points: null }],
+        backlog: [], activeSprint: null, sprints: []
+      }],
+      activeProjectId: 'proj1'
+    };
+    localStorage.setItem('kanban-personal-board-v1', JSON.stringify(state));
+  });
+  await page.reload();
+  page.on('pageerror', (err) => errors.push(err.message));
+  page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
+  await page.evaluate(() => {
+    const backdrop = document.getElementById('save-warning-backdrop');
+    if (backdrop) backdrop.style.display = 'none';
+  });
+
+  const today = await page.evaluate(() => todayDateStr());
+  const backfilled = await page.evaluate(() => activeProject().done[0].completedAt);
+  expect(backfilled).toBe(today);
+
+  const card = page.locator('.card', { hasText: 'Old finished kanban task' });
+  await expect(card.locator('.card-completed')).toBeVisible();
+
+  expect(errors, 'no console/page errors migrating a legacy Kanban Done item').toEqual([]);
+});

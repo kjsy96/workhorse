@@ -95,6 +95,17 @@
         });
       }
 
+      // Kanban's own Done column didn't track completedAt before issue #32
+      // (only a sprint's Done did) -- backfill with today as the best
+      // available information, same best-effort philosophy as just above.
+      // This also covers items that were migrated out of the pre-separation
+      // shared todo/doing/done shape into Kanban's own p.done a few lines up.
+      if (Array.isArray(p.done)) {
+        p.done.forEach(item => {
+          if (!item.completedAt) item.completedAt = todayDateStr();
+        });
+      }
+
       // Pre-pool-separation (original v1.4) archived sprints stored their
       // finished items in `completedItems`, and had no nested todo/doing/
       // review at all (those lived on the project directly, not the sprint,
