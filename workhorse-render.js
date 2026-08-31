@@ -257,20 +257,21 @@
           }
         }
 
-        function renderView() {
-          listView.innerHTML = '';
-          const existingToggle = card.querySelector('.card-truncate-toggle');
-          if (existingToggle) existingToggle.remove();
-
-          const lines = item.text.split('\n');
+        // Appends parsed content for `subset` (a slice of the card's full
+        // line array) into `container`. `offset` is subset's starting index
+        // within the *full* array, so checkbox toggling still writes back to
+        // the right line no matter which container (title vs description) a
+        // checkbox line ends up rendered into.
+        function renderLines(container, subset, offset) {
           let currentList = null;
-          lines.forEach((rawLine, idx) => {
+          subset.forEach((rawLine, i) => {
+            const idx = offset + i;
             if (rawLine.trim() === '') {
               currentList = null;
               const spacer = document.createElement('div');
               spacer.className = 'card-line-text';
               spacer.innerHTML = '&nbsp;';
-              listView.appendChild(spacer);
+              container.appendChild(spacer);
               return;
             }
             const parsed = parseLine(rawLine);
@@ -278,7 +279,7 @@
               if (!currentList) {
                 currentList = document.createElement('ul');
                 currentList.className = 'card-bullet-list';
-                listView.appendChild(currentList);
+                container.appendChild(currentList);
               }
               const li = document.createElement('li');
               li.textContent = parsed.content;
@@ -302,38 +303,58 @@
               span.textContent = parsed.content;
               row.appendChild(cb);
               row.appendChild(span);
-              listView.appendChild(row);
+              container.appendChild(row);
             } else {
               currentList = null;
               const p = document.createElement('div');
               p.className = 'card-line-text';
               p.textContent = parsed.content;
-              listView.appendChild(p);
+              container.appendChild(p);
             }
           });
+        }
 
-          const isExpanded = expandedCards.has(item.id);
+        // Line 1 is the card's title -- always shown, parsed the same as any
+        // other line (so a single-line checkbox/bullet "title" -- the common
+        // shape for a quick-captured task -- stays a fully interactive
+        // checkbox/bullet, not plain text). Lines 2+ are its description,
+        // hidden by default behind a "Show details" toggle so a lengthy task
+        // doesn't dominate the column; expandedCards (ephemeral, keyed by
+        // item id) tracks which cards currently have it open.
+        function renderView() {
+          listView.innerHTML = '';
+          const existingDesc = card.querySelector('.card-description-view');
+          if (existingDesc) existingDesc.remove();
+          const existingToggle = card.querySelector('.card-details-toggle');
+          if (existingToggle) existingToggle.remove();
 
-          const applyTruncation = () => {
-            if (!listView.isConnected) return;
-            const isOverflowing = listView.scrollHeight > TRUNCATE_CLAMP_HEIGHT;
-            listView.classList.toggle('clamped', isOverflowing && !isExpanded);
-            if (isOverflowing) {
-              const toggleBtn = document.createElement('button');
-              toggleBtn.className = 'card-truncate-toggle';
-              toggleBtn.textContent = isExpanded ? 'Show less' : 'Show more';
-              toggleBtn.addEventListener('mousedown', (e) => e.stopPropagation());
-              toggleBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                if (isExpanded) expandedCards.delete(item.id); else expandedCards.add(item.id);
-                renderView();
-              });
-              listView.insertAdjacentElement('afterend', toggleBtn);
+          const lines = item.text.split('\n');
+          const descLines = lines.slice(1);
+          const hasDescription = descLines.some(l => l.trim() !== '');
+
+          renderLines(listView, lines.slice(0, 1), 0);
+
+          if (hasDescription) {
+            const isExpanded = expandedCards.has(item.id);
+
+            const toggleBtn = document.createElement('button');
+            toggleBtn.className = 'card-details-toggle';
+            toggleBtn.textContent = isExpanded ? 'Hide details' : 'Show details';
+            toggleBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+            toggleBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              if (isExpanded) expandedCards.delete(item.id); else expandedCards.add(item.id);
+              renderView();
+            });
+            listView.insertAdjacentElement('afterend', toggleBtn);
+
+            if (isExpanded) {
+              const descView = document.createElement('div');
+              descView.className = 'card-list-view card-description-view';
+              toggleBtn.insertAdjacentElement('afterend', descView);
+              renderLines(descView, descLines, 1);
             }
-          };
-
-          if (listView.isConnected) applyTruncation();
-          else requestAnimationFrame(applyTruncation);
+          }
         }
 
         function updateBodyVisibility() {
@@ -758,7 +779,7 @@
 
         card.addEventListener('touchstart', (e) => {
           if (editingNow) return;
-          if (e.target.closest('.card-menu, .checklist-row, .card-truncate-toggle')) return;
+          if (e.target.closest('.card-menu, .checklist-row, .card-details-toggle')) return;
           const touch = e.touches[0];
           touchDrag = {
             itemId: item.id,
@@ -1160,20 +1181,34 @@
     touchDrag = null;
   }
 
+  // Shared by the quick-capture inline input below and the "more detail"
+  // modal, so there's exactly one place that knows how to actually create a
+  // task. Returns false (and creates nothing) if the column has nowhere to
+  // go right now -- e.g. a Scrum column other than Backlog with no active
+  // sprint.
+  function createTask(col, text, opts) {
+    const proj = activeProject();
+    const container = resolveContainer(proj, col);
+    if (!container) return false;
+    pushHistory();
+    const completedAt = isDoneContainer(proj, container, col) ? todayDateStr() : null;
+    container[col].push({
+      id: uid(), text: text, created: Date.now(),
+      deadline: (opts && opts.deadline) || null,
+      points: (opts && opts.points != null) ? opts.points : null,
+      completedAt: completedAt
+    });
+    save(state);
+    return true;
+  }
+
   document.querySelectorAll('.add-input').forEach(input => {
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         const text = input.value.trim();
         if (!text) return;
-        const col = input.dataset.col;
-        const proj = activeProject();
-        const container = resolveContainer(proj, col);
-        if (!container) return; // e.g. scrum view with no active sprint yet
-        pushHistory();
-        const completedAt = isDoneContainer(proj, container, col) ? todayDateStr() : null;
-        container[col].push({ id: uid(), text: text, created: Date.now(), deadline: null, points: null, completedAt: completedAt });
-        save(state);
+        if (!createTask(input.dataset.col, text, null)) return; // e.g. scrum view with no active sprint yet
         input.value = '';
         input.style.height = 'auto';
         render();
@@ -1184,6 +1219,79 @@
       input.style.height = 'auto';
       input.style.height = input.scrollHeight + 'px';
     });
+  });
+
+  // "More detail" modal -- same underlying createTask() as the quick-capture
+  // input above, just with separate Title/Description fields (stored as
+  // line 1 + the rest of item.text, same convention renderView() already
+  // uses to decide what's always-visible vs. hidden behind "Show details")
+  // and optional deadline/points set up front instead of only after the
+  // fact via the kebab menu.
+  let taskModalCol = null;
+
+  function openTaskModal(col, prefillTitle) {
+    taskModalCol = col;
+    const titleEl = document.getElementById('task-modal-title-input');
+    titleEl.value = prefillTitle || '';
+    document.getElementById('task-modal-description-input').value = '';
+    document.getElementById('task-modal-deadline-input').value = '';
+    document.getElementById('task-modal-points-input').value = '';
+    document.getElementById('task-modal-backdrop').style.display = 'flex';
+    titleEl.focus();
+    titleEl.setSelectionRange(titleEl.value.length, titleEl.value.length); // cursor after any prefill, not selecting it
+  }
+
+  function closeTaskModal() {
+    document.getElementById('task-modal-backdrop').style.display = 'none';
+    taskModalCol = null;
+  }
+
+  function submitTaskModal() {
+    const title = document.getElementById('task-modal-title-input').value.trim();
+    if (!title) { alert('Give the task a title first.'); return; }
+    const description = document.getElementById('task-modal-description-input').value.trim();
+    const text = description ? title + '\n' + description : title;
+    const deadline = document.getElementById('task-modal-deadline-input').value || null;
+    const pointsVal = document.getElementById('task-modal-points-input').value;
+    const points = pointsVal === '' ? null : Math.max(0, Math.round(Number(pointsVal)));
+    const col = taskModalCol;
+    if (!createTask(col, text, { deadline: deadline, points: points })) {
+      alert('Start a sprint before adding tasks here.');
+      return;
+    }
+    closeTaskModal();
+    const inlineInput = document.querySelector('.add-input[data-col="' + col + '"]');
+    if (inlineInput) { inlineInput.value = ''; inlineInput.style.height = 'auto'; }
+    render();
+  }
+
+  document.querySelectorAll('.add-expand-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const col = btn.dataset.col;
+      const inlineInput = document.querySelector('.add-input[data-col="' + col + '"]');
+      openTaskModal(col, inlineInput ? inlineInput.value : '');
+    });
+  });
+
+  document.getElementById('task-modal-cancel').addEventListener('click', closeTaskModal);
+  document.getElementById('task-modal-submit').addEventListener('click', submitTaskModal);
+  document.getElementById('task-modal-backdrop').addEventListener('click', (e) => {
+    if (e.target.id === 'task-modal-backdrop') closeTaskModal();
+  });
+  // Only the Title field submits on Enter, matching the inline add-input's
+  // own quick-capture convention -- the Description field is for multi-line
+  // detail, so Enter there is a plain newline, same as everywhere else
+  // multi-line task text is edited.
+  document.getElementById('task-modal-title-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      submitTaskModal();
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && document.getElementById('task-modal-backdrop').style.display === 'flex') {
+      closeTaskModal();
+    }
   });
 
   document.getElementById('undo-btn').addEventListener('click', undo);

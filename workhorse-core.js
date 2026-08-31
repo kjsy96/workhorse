@@ -3,7 +3,6 @@
   const THEME_STORAGE_KEY = 'kanban-theme-v1';
   const COLS = ['backlog', 'todo', 'doing', 'review', 'done'];
   const DONE_STACK_VISIBLE_COUNT = 4;
-  const TRUNCATE_CLAMP_HEIGHT = 190; // px; keep in sync with .card-list-view.clamped max-height below
   const supportsFS = 'showSaveFilePicker' in window && 'showOpenFilePicker' in window;
 
   // Theme state only reads a DOM attribute already set by the early <head>

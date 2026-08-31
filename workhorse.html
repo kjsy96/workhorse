@@ -83,6 +83,30 @@
   </div>
 </div>
 
+<div class="sprint-modal-backdrop" id="task-modal-backdrop" style="display:none;">
+  <div class="sprint-modal">
+    <h2>Add a task</h2>
+    <label class="sprint-modal-label">Title
+      <input type="text" id="task-modal-title-input" class="card-menu-date-input sprint-modal-input" placeholder="What needs doing?">
+    </label>
+    <label class="sprint-modal-label">Description (optional)
+      <textarea id="task-modal-description-input" class="sprint-modal-input task-modal-textarea" rows="5" placeholder="Any extra detail. Use &quot;* &quot; for a bullet, &quot;[] &quot; for a checkbox..."></textarea>
+    </label>
+    <div class="sprint-modal-dates">
+      <label class="sprint-modal-label">Deadline (optional)
+        <input type="date" id="task-modal-deadline-input" class="card-menu-date-input sprint-modal-input">
+      </label>
+      <label class="sprint-modal-label">Points (optional)
+        <input type="number" min="0" id="task-modal-points-input" class="card-menu-date-input sprint-modal-input">
+      </label>
+    </div>
+    <div class="sprint-modal-actions">
+      <button class="save-status-btn" id="task-modal-cancel">Cancel</button>
+      <button class="save-status-btn" id="task-modal-submit">Add Task</button>
+    </div>
+  </div>
+</div>
+
 <header>
   <div class="header-left">
     <div class="history-controls">
@@ -122,6 +146,7 @@
     </div>
     <div class="add-row">
       <textarea class="add-input" data-col="backlog" rows="1" placeholder="+ add a task, press Enter"></textarea>
+      <button class="add-expand-btn" data-col="backlog" type="button" title="Add task with more detail">&#8942;</button>
     </div>
     <div class="dropzone" data-col="backlog" id="dropzone-backlog"></div>
   </div>
@@ -134,6 +159,7 @@
     </div>
     <div class="add-row">
       <textarea class="add-input" data-col="todo" rows="1" placeholder="+ add a task, press Enter"></textarea>
+      <button class="add-expand-btn" data-col="todo" type="button" title="Add task with more detail">&#8942;</button>
     </div>
     <div class="dropzone" data-col="todo" id="dropzone-todo"></div>
   </div>
@@ -146,6 +172,7 @@
     </div>
     <div class="add-row">
       <textarea class="add-input" data-col="doing" rows="1" placeholder="+ add a task, press Enter"></textarea>
+      <button class="add-expand-btn" data-col="doing" type="button" title="Add task with more detail">&#8942;</button>
     </div>
     <div class="dropzone" data-col="doing" id="dropzone-doing"></div>
   </div>
@@ -158,6 +185,7 @@
     </div>
     <div class="add-row">
       <textarea class="add-input" data-col="review" rows="1" placeholder="+ add a task, press Enter"></textarea>
+      <button class="add-expand-btn" data-col="review" type="button" title="Add task with more detail">&#8942;</button>
     </div>
     <div class="dropzone" data-col="review" id="dropzone-review"></div>
   </div>
@@ -170,6 +198,7 @@
     </div>
     <div class="add-row">
       <textarea class="add-input" data-col="done" rows="1" placeholder="+ add a task, press Enter"></textarea>
+      <button class="add-expand-btn" data-col="done" type="button" title="Add task with more detail">&#8942;</button>
     </div>
     <div class="dropzone" data-col="done" id="dropzone-done"></div>
   </div>
