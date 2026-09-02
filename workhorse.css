@@ -1077,12 +1077,19 @@
     background: var(--overlay);
   }
 
+  /* Appended directly to <body> in JS (not left nested under .card-menu) and
+     positioned in viewport coordinates there -- position: fixed on an
+     element still inside .card would be positioned relative to .card
+     instead of the viewport the moment the card is :hover'd, since
+     .card:hover's transform makes it a containing block for fixed
+     descendants. Toggled via its own .open class rather than a
+     .card-menu.open ancestor selector, since it's no longer a descendant. */
   .card-menu-dropdown {
     display: none;
-    position: absolute;
-    top: 28px;
-    right: 0;
+    position: fixed;
     min-width: 168px;
+    max-height: calc(100vh - 16px);
+    overflow-y: auto;
     background: var(--paper);
     border: 1px solid var(--line);
     border-radius: 10px;
@@ -1091,7 +1098,7 @@
     z-index: 20;
   }
 
-  .card-menu.open .card-menu-dropdown { display: block; }
+  .card-menu-dropdown.open { display: block; }
 
   .card-menu-item {
     display: block;

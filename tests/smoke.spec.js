@@ -13,6 +13,19 @@ async function addTask(page, col, title) {
   await page.locator('#task-modal-submit').click();
 }
 
+// Opens `card`'s kebab menu and returns its dropdown -- the dropdown lives
+// in <body>, not nested under the card (issue #47, so it can't be clipped
+// by a card/column ancestor), so it has to be located via `page`, not
+// `card.locator(...)`. Safe to assume exactly one .open dropdown at a time,
+// since opening any menu closes every other one first.
+async function openCardMenu(page, card) {
+  await card.hover();
+  await card.locator('.card-menu-btn').click();
+  const dropdown = page.locator('.card-menu-dropdown.open');
+  await expect(dropdown).toBeVisible();
+  return dropdown;
+}
+
 test('loads with no console/page errors and the board renders', async ({ page }) => {
   const errors = [];
   page.on('pageerror', (err) => errors.push(err.message));
@@ -87,9 +100,8 @@ test('Kanban and Scrum are independent pools; the toggle never moves data, kebab
 
   // Send the Kanban task to Scrum via its kebab menu.
   const card = page.locator('.card', { hasText: 'Kanban task' });
-  await card.hover();
-  await card.locator('.card-menu-btn').click();
-  await card.locator('.card-menu-item', { hasText: 'Send to Scrum' }).click();
+  let dropdown = await openCardMenu(page, card);
+  await dropdown.locator('.card-menu-item', { hasText: 'Send to Scrum' }).click();
   await expect(page.locator('[data-count="todo"]')).toHaveText('0');
 
   await page.locator('.view-toggle-option', { hasText: 'Scrum' }).click();
@@ -97,9 +109,8 @@ test('Kanban and Scrum are independent pools; the toggle never moves data, kebab
 
   // Send it back to Kanban.
   const scrumCard = page.locator('.card', { hasText: 'Kanban task' });
-  await scrumCard.hover();
-  await scrumCard.locator('.card-menu-btn').click();
-  await scrumCard.locator('.card-menu-item', { hasText: 'Send to Kanban' }).click();
+  dropdown = await openCardMenu(page, scrumCard);
+  await dropdown.locator('.card-menu-item', { hasText: 'Send to Kanban' }).click();
   await expect(page.locator('[data-count="backlog"]')).toHaveText('0');
 
   await page.locator('.view-toggle-option', { hasText: 'Kanban' }).click();
@@ -181,9 +192,8 @@ test('story point estimates can be set, typed multi-digit, and cleared', async (
   await addTask(page, 'todo', 'Task with no estimate');
 
   const card = page.locator('.card', { hasText: 'Task with an estimate' });
-  await card.hover();
-  await card.locator('.card-menu-btn').click();
-  const pointsInput = card.locator('.card-menu-date-input[type="number"]');
+  let dropdown = await openCardMenu(page, card);
+  const pointsInput = dropdown.locator('.card-menu-date-input[type="number"]');
 
   // type digit-by-digit (not .fill()) to catch the historical "render() on
   // every keystroke steals focus" bug class this pattern exists to avoid
@@ -202,9 +212,8 @@ test('story point estimates can be set, typed multi-digit, and cleared', async (
   await page.locator('#redo-btn').click();
   await expect(card.locator('.card-points')).toHaveText('13 pts');
 
-  await card.hover();
-  await card.locator('.card-menu-btn').click();
-  await card.locator('.card-menu-item', { hasText: 'Clear points' }).click();
+  dropdown = await openCardMenu(page, card);
+  await dropdown.locator('.card-menu-item', { hasText: 'Clear points' }).click();
   await expect(card.locator('.card-points')).toBeHidden();
 
   expect(errors, 'no console/page errors while setting/clearing points').toEqual([]);
@@ -229,10 +238,9 @@ test('burndown chart derives from completion dates: leaving Done un-completes an
 
   async function setPoints(taskText, value) {
     const card = page.locator('.card', { hasText: taskText });
-    await card.hover();
-    await card.locator('.card-menu-btn').click();
-    await card.locator('.card-menu-date-input[type="number"]').fill(String(value));
-    await card.locator('.card-menu-date-input[type="number"]').blur();
+    const dropdown = await openCardMenu(page, card);
+    await dropdown.locator('.card-menu-date-input[type="number"]').fill(String(value));
+    await dropdown.locator('.card-menu-date-input[type="number"]').blur();
     await page.keyboard.press('Escape'); // close the kebab menu so it doesn't block the next card
   }
   await setPoints('Three point task', 3);
@@ -304,9 +312,8 @@ test('burndown chart derives from completion dates: leaving Done un-completes an
   // (e.g. they forgot to move the card until later) and have the chart
   // treat that earlier day as when it actually burned down, not "today."
   const card = page.locator('.card', { hasText: 'Three point task' });
-  await card.hover();
-  await card.locator('.card-menu-btn').click();
-  const completedInput = card.locator('.card-menu-deadline-row', { hasText: 'Completed on' }).locator('input[type="date"]');
+  const dropdown = await openCardMenu(page, card);
+  const completedInput = dropdown.locator('.card-menu-deadline-row', { hasText: 'Completed on' }).locator('input[type="date"]');
   await completedInput.fill('2026-08-21');
   await completedInput.blur();
   await page.keyboard.press('Escape');
@@ -804,9 +811,8 @@ test('a card\'s creation date can be edited from the kebab menu, and can\'t be c
   await addTask(page, 'todo', 'Task for creation date test');
 
   const card = page.locator('.card', { hasText: 'Task for creation date test' });
-  await card.hover();
-  await card.locator('.card-menu-btn').click();
-  const createdInput = card.locator('.card-menu-deadline-row', { hasText: 'Created on' }).locator('input[type="date"]');
+  let dropdown = await openCardMenu(page, card);
+  const createdInput = dropdown.locator('.card-menu-deadline-row', { hasText: 'Created on' }).locator('input[type="date"]');
 
   const today = await page.evaluate(() => todayDateStr());
   await expect(createdInput).toHaveValue(today); // freshly created -- defaults to today
@@ -822,9 +828,8 @@ test('a card\'s creation date can be edited from the kebab menu, and can\'t be c
 
   // Clearing the field (e.g. an accidental full-select-and-delete) must not
   // leave the card with no creation date -- reverts to the last valid value.
-  await card.hover();
-  await card.locator('.card-menu-btn').click();
-  const createdInput2 = card.locator('.card-menu-deadline-row', { hasText: 'Created on' }).locator('input[type="date"]');
+  dropdown = await openCardMenu(page, card);
+  const createdInput2 = dropdown.locator('.card-menu-deadline-row', { hasText: 'Created on' }).locator('input[type="date"]');
   await createdInput2.fill('');
   await createdInput2.blur();
   await expect(createdInput2).toHaveValue('2026-01-05');
@@ -904,9 +909,8 @@ test('Kanban Done cards now track and show a completion date too, not just Scrum
   await expect(card.locator('.card-completed')).toBeHidden();
 
   // Before reaching Done, the kebab menu has no "Completed on" row at all.
-  await card.hover();
-  await card.locator('.card-menu-btn').click();
-  await expect(card.locator('.card-menu-deadline-row', { hasText: 'Completed on' })).toBeHidden();
+  let dropdown = await openCardMenu(page, card);
+  await expect(dropdown.locator('.card-menu-deadline-row', { hasText: 'Completed on' })).toBeHidden();
   await page.keyboard.press('Escape');
 
   const today = await page.evaluate(() => todayDateStr());
@@ -917,9 +921,8 @@ test('Kanban Done cards now track and show a completion date too, not just Scrum
   expect(completedAt).toBe(today);
 
   // Backdate it via the now-visible "Completed on" field; the footer badge follows.
-  await card.hover();
-  await card.locator('.card-menu-btn').click();
-  const completedInput = card.locator('.card-menu-deadline-row', { hasText: 'Completed on' }).locator('input[type="date"]');
+  dropdown = await openCardMenu(page, card);
+  const completedInput = dropdown.locator('.card-menu-deadline-row', { hasText: 'Completed on' }).locator('input[type="date"]');
   await expect(completedInput).toBeVisible();
   await completedInput.fill('2026-02-14');
   await completedInput.blur();
@@ -1139,4 +1142,53 @@ test('the add-task modal is reachable in every column, both modes, including Bac
   await expect(page.locator('#dropzone-backlog .card')).toContainText('Mobile-entered task');
 
   expect(errors, 'no console/page errors opening the add-task modal from every column').toEqual([]);
+});
+
+test('kebab menu dropdown stays within the viewport near the bottom edge (issue #47)', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 500 }); // short viewport to force overflow
+  await page.goto(APP_URL);
+  await page.evaluate(() => {
+    const backdrop = document.getElementById('save-warning-backdrop');
+    if (backdrop) backdrop.style.display = 'none';
+  });
+
+  // Fill the "To do" column with enough cards that the last one sits near
+  // (or below) the bottom of a short viewport.
+  for (let i = 0; i < 8; i++) {
+    await addTask(page, 'todo', 'Task ' + i);
+  }
+
+  const lastCard = page.locator('.column[data-col="todo"] .card').last();
+  await lastCard.scrollIntoViewIfNeeded();
+  const dropdown = await openCardMenu(page, lastCard);
+
+  const box = await dropdown.boundingBox();
+  const viewport = page.viewportSize();
+  expect(box.y).toBeGreaterThanOrEqual(0);
+  expect(box.y + box.height).toBeLessThanOrEqual(viewport.height + 1);
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(viewport.width + 1);
+});
+
+test('kebab menu dropdown stays anchored to its button on window scroll instead of drifting', async ({ page }) => {
+  await page.goto(APP_URL);
+  await page.evaluate(() => {
+    const backdrop = document.getElementById('save-warning-backdrop');
+    if (backdrop) backdrop.style.display = 'none';
+  });
+  for (let i = 0; i < 15; i++) {
+    await addTask(page, 'todo', 'Task ' + i);
+  }
+  const firstCard = page.locator('.column[data-col="todo"] .card').first();
+  const dropdown = await openCardMenu(page, firstCard);
+
+  await page.mouse.wheel(0, 400);
+  await page.waitForTimeout(150);
+
+  // Should still be open, repositioned to sit right under its (now
+  // scrolled) button rather than drifting away or closing.
+  await expect(dropdown).toBeVisible();
+  const btnBox = await firstCard.locator('.card-menu-btn').boundingBox();
+  const dropBox = await dropdown.boundingBox();
+  expect(Math.abs(dropBox.y - (btnBox.y + btnBox.height + 4))).toBeLessThan(2);
 });

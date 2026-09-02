@@ -31,6 +31,39 @@
   function closeAllCardMenus() {
     document.querySelectorAll('.card-menu.open').forEach(m => m.classList.remove('open'));
     document.querySelectorAll('.card.menu-open').forEach(c => c.classList.remove('menu-open'));
+    document.querySelectorAll('.card-menu-dropdown.open').forEach(d => d.classList.remove('open'));
+  }
+
+  // The dropdown is `position: fixed` (see workhorse.css) specifically so it
+  // can never be clipped by a card/column/dropzone ancestor and always
+  // layers above everything else -- but that means its position has to be
+  // computed in viewport coordinates here, rather than left to CSS, and
+  // reflows if the button is near an edge (flips above instead of below,
+  // clamps horizontally) so the whole menu always stays on-screen no matter
+  // where in the board it's opened from.
+  function positionCardMenuDropdown(menuBtn, dropdown) {
+    const margin = 8;
+    const btnRect = menuBtn.getBoundingClientRect();
+    // offsetWidth/offsetHeight rather than getBoundingClientRect(): a fixed
+    // element with no top/left set yet renders at a browser-chosen "static
+    // position" that has nothing to do with where we're about to place it,
+    // so reading its rect at that point would measure the wrong spot. The
+    // offset* dimensions only reflect the laid-out box size, not position,
+    // so they're accurate regardless of what top/left currently are.
+    const dropWidth = dropdown.offsetWidth;
+    const dropHeight = dropdown.offsetHeight;
+
+    let top = btnRect.bottom + 4;
+    if (top + dropHeight > window.innerHeight - margin) {
+      const above = btnRect.top - dropHeight - 4;
+      top = above >= margin ? above : Math.max(margin, window.innerHeight - dropHeight - margin);
+    }
+
+    let left = btnRect.right - dropWidth;
+    left = Math.max(margin, Math.min(left, window.innerWidth - dropWidth - margin));
+
+    dropdown.style.top = top + 'px';
+    dropdown.style.left = left + 'px';
   }
 
   function render() {
@@ -204,6 +237,12 @@
 
   function renderBoard() {
     const proj = activeProject();
+    // Card menu dropdowns live in document.body, not nested under their
+    // card (see workhorse.css) -- zone.innerHTML = '' below discards each
+    // rebuilt card's old DOM, but that doesn't touch a body-level dropdown,
+    // so any left over from the previous render have to be swept up here or
+    // they'd silently accumulate on every re-render.
+    document.querySelectorAll('.card-menu-dropdown').forEach(d => d.remove());
     COLS.forEach(col => {
       const zone = document.getElementById('dropzone-' + col);
       zone.innerHTML = '';
@@ -634,15 +673,24 @@
         });
         dropdown.appendChild(deleteItem);
 
-        menuWrap.appendChild(dropdown);
+        // Appended to <body>, not menuWrap -- see the .card-menu-dropdown
+        // comment in workhorse.css for why it can't stay nested under the
+        // card and still use position: fixed reliably. Stashing menuBtn
+        // directly on the node (a plain JS property, not an HTML attribute)
+        // is how repositionOpenCardMenu finds the right anchor on scroll/
+        // resize, since dropdown and menuBtn are no longer DOM relatives.
+        dropdown._menuBtn = menuBtn;
+        document.body.appendChild(dropdown);
 
         menuBtn.addEventListener('click', (e) => {
           e.stopPropagation();
-          const isOpen = menuWrap.classList.contains('open');
+          const isOpen = dropdown.classList.contains('open');
           closeAllCardMenus();
           if (!isOpen) {
             menuWrap.classList.add('open');
             card.classList.add('menu-open');
+            dropdown.classList.add('open');
+            positionCardMenuDropdown(menuBtn, dropdown);
           }
         });
         menuBtn.addEventListener('mousedown', (e) => e.stopPropagation());
@@ -1293,7 +1341,7 @@
   });
 
   document.addEventListener('click', (e) => {
-    if (!e.target.closest('.card-menu')) {
+    if (!e.target.closest('.card-menu') && !e.target.closest('.card-menu-dropdown')) {
       closeAllCardMenus();
     }
     if (!e.target.closest('.save-menu')) {
@@ -1307,6 +1355,20 @@
       saveMenuDropdown.classList.remove('open');
     }
   });
+
+  // The dropdown's fixed position is computed at open time (see
+  // positionCardMenuDropdown) rather than re-tracked continuously, so a
+  // scroll or resize would otherwise leave it visually stranded away from
+  // its button -- recompute it on both instead of just closing the menu,
+  // since closing on every scroll (including a scroll a click itself
+  // triggers to bring an element into view) is more disruptive than
+  // keeping the menu open and correctly anchored.
+  function repositionOpenCardMenu() {
+    const dropdown = document.querySelector('.card-menu-dropdown.open');
+    if (dropdown && dropdown._menuBtn) positionCardMenuDropdown(dropdown._menuBtn, dropdown);
+  }
+  window.addEventListener('scroll', repositionOpenCardMenu, true);
+  window.addEventListener('resize', repositionOpenCardMenu);
 
   document.addEventListener('keydown', (e) => {
     const modifier = e.metaKey || e.ctrlKey;
