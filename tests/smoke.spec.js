@@ -1144,6 +1144,98 @@ test('the add-task modal is reachable in every column, both modes, including Bac
   expect(errors, 'no console/page errors opening the add-task modal from every column').toEqual([]);
 });
 
+test('editing a task opens the modal pre-filled and updates it in place (issue #45)', async ({ page }) => {
+  await page.goto(APP_URL);
+  await page.evaluate(() => {
+    const backdrop = document.getElementById('save-warning-backdrop');
+    if (backdrop) backdrop.style.display = 'none';
+  });
+
+  // Create with title + description + deadline + points via the modal.
+  await page.locator('.add-task-btn[data-col="todo"]').click();
+  await page.locator('#task-modal-title-input').fill('Original title');
+  await page.locator('#task-modal-description-input').fill('Some detail\n* a bullet');
+  await page.locator('#task-modal-deadline-input').fill('2026-03-01');
+  await page.locator('#task-modal-points-input').fill('3');
+  await page.locator('#task-modal-submit').click();
+
+  await expect(page.locator('[data-count="todo"]')).toHaveText('1');
+  const card = page.locator('.card', { hasText: 'Original title' });
+
+  // No in-card contentEditable editing left -- the card's text is not
+  // itself an editable element.
+  await expect(card.locator('[contenteditable="true"]')).toHaveCount(0);
+
+  let dropdown = await openCardMenu(page, card);
+  await dropdown.locator('.card-menu-item', { hasText: 'Edit task' }).click();
+
+  await expect(page.locator('#task-modal-backdrop')).toBeVisible();
+  await expect(page.locator('#task-modal-heading')).toHaveText('Edit task');
+  await expect(page.locator('#task-modal-submit')).toHaveText('Save Changes');
+  await expect(page.locator('#task-modal-title-input')).toHaveValue('Original title');
+  await expect(page.locator('#task-modal-description-input')).toHaveValue('Some detail\n* a bullet');
+  await expect(page.locator('#task-modal-deadline-input')).toHaveValue('2026-03-01');
+  await expect(page.locator('#task-modal-points-input')).toHaveValue('3');
+
+  await page.locator('#task-modal-title-input').fill('Edited title');
+  await page.locator('#task-modal-points-input').fill('8');
+  await page.locator('#task-modal-submit').click();
+
+  await expect(page.locator('#task-modal-backdrop')).toBeHidden();
+  // Updated in place, not duplicated.
+  await expect(page.locator('.card', { hasText: 'Edited title' })).toHaveCount(1);
+  await expect(page.locator('.card', { hasText: 'Original title' })).toHaveCount(0);
+  await expect(page.locator('[data-count="todo"]')).toHaveText('1');
+  const editedCard = page.locator('.card', { hasText: 'Edited title' });
+  await expect(editedCard.locator('.card-points')).toHaveText('8 pts');
+  await expect(editedCard.locator('.card-deadline')).toHaveText('due Mar 1');
+  await editedCard.locator('.card-details-toggle').click();
+  await expect(editedCard.locator('.card-bullet-list li')).toHaveText('a bullet');
+
+  // Undo/redo cover the edit as a single history step.
+  await page.locator('#undo-btn').click();
+  await expect(page.locator('.card', { hasText: 'Original title' })).toHaveCount(1);
+  await page.locator('#redo-btn').click();
+  await expect(page.locator('.card', { hasText: 'Edited title' })).toHaveCount(1);
+});
+
+test('canceling the edit modal leaves the task unchanged', async ({ page }) => {
+  await page.goto(APP_URL);
+  await page.evaluate(() => {
+    const backdrop = document.getElementById('save-warning-backdrop');
+    if (backdrop) backdrop.style.display = 'none';
+  });
+  await addTask(page, 'todo', 'Untouched title');
+  const card = page.locator('.card', { hasText: 'Untouched title' });
+  const dropdown = await openCardMenu(page, card);
+  await dropdown.locator('.card-menu-item', { hasText: 'Edit task' }).click();
+
+  await page.locator('#task-modal-title-input').fill('Should not stick');
+  await page.locator('#task-modal-cancel').click();
+
+  await expect(page.locator('#task-modal-backdrop')).toBeHidden();
+  await expect(page.locator('.card', { hasText: 'Untouched title' })).toHaveCount(1);
+  await expect(page.locator('.card', { hasText: 'Should not stick' })).toHaveCount(0);
+});
+
+test('reopening the add-task modal after an edit shows Add a task again, not stale edit state', async ({ page }) => {
+  await page.goto(APP_URL);
+  await page.evaluate(() => {
+    const backdrop = document.getElementById('save-warning-backdrop');
+    if (backdrop) backdrop.style.display = 'none';
+  });
+  await addTask(page, 'todo', 'Task one');
+  const card = page.locator('.card', { hasText: 'Task one' });
+  const dropdown = await openCardMenu(page, card);
+  await dropdown.locator('.card-menu-item', { hasText: 'Edit task' }).click();
+  await page.locator('#task-modal-submit').click(); // save with no changes
+
+  await page.locator('.add-task-btn[data-col="todo"]').click();
+  await expect(page.locator('#task-modal-heading')).toHaveText('Add a task');
+  await expect(page.locator('#task-modal-submit')).toHaveText('Add Task');
+  await expect(page.locator('#task-modal-title-input')).toHaveValue('');
+});
+
 test('burndown total grows when scope is added to an already-started sprint (issue #46)', async ({ page }) => {
   page.on('dialog', (d) => d.accept());
   await page.goto(APP_URL);

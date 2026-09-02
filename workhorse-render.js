@@ -264,19 +264,9 @@
         pin.className = 'pin';
         card.appendChild(pin);
 
-        const text = document.createElement('div');
-        text.className = 'card-text';
-        text.contentEditable = 'false';
-        text.spellcheck = false;
-        text.textContent = item.text;
-        card.appendChild(text);
-
         const listView = document.createElement('div');
         listView.className = 'card-list-view';
         card.appendChild(listView);
-
-        let editingNow = false;
-        let editStartText = item.text;
 
         function parseLine(line) {
           const bulletMatch = line.match(/^(\s*)[*-]\s+(.*)$/);
@@ -396,75 +386,7 @@
           }
         }
 
-        function updateBodyVisibility() {
-          text.style.display = editingNow ? '' : 'none';
-          listView.style.display = editingNow ? 'none' : '';
-          if (!editingNow) renderView();
-        }
-        updateBodyVisibility();
-
-        function enterEdit() {
-          editStartText = item.text;
-          editingNow = true;
-          text.contentEditable = 'true';
-          card.draggable = false;
-          card.classList.add('editing');
-          updateBodyVisibility();
-          text.focus();
-          const range = document.createRange();
-          range.selectNodeContents(text);
-          range.collapse(false);
-          const sel = window.getSelection();
-          sel.removeAllRanges();
-          sel.addRange(range);
-        }
-
-        function exitEdit() {
-          text.contentEditable = 'false';
-          card.draggable = true;
-          card.classList.remove('editing');
-          editingNow = false;
-          const newText = extractEditableText(text).trim();
-          if (!newText) {
-            removeItem(item.id);
-            render();
-            return;
-          }
-          if (newText !== item.text) {
-            pushHistory();
-            item.text = newText;
-            save(state);
-          }
-          updateBodyVisibility();
-        }
-
-        text.addEventListener('blur', exitEdit);
-        text.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter' && e.shiftKey) {
-            e.preventDefault();
-            const inserted = document.execCommand && document.execCommand('insertText', false, '\n');
-            if (!inserted) {
-              const sel = window.getSelection();
-              if (sel && sel.rangeCount) {
-                const range = sel.getRangeAt(0);
-                range.deleteContents();
-                const newlineNode = document.createTextNode('\n');
-                range.insertNode(newlineNode);
-                range.setStartAfter(newlineNode);
-                range.setEndAfter(newlineNode);
-                sel.removeAllRanges();
-                sel.addRange(range);
-              }
-            }
-            return;
-          }
-          if (e.key === 'Enter') { e.preventDefault(); text.blur(); }
-          if (e.key === 'Escape') {
-            e.preventDefault();
-            text.textContent = editStartText;
-            text.blur();
-          }
-        });
+        renderView();
 
         const menuWrap = document.createElement('div');
         menuWrap.className = 'card-menu';
@@ -485,7 +407,7 @@
           e.stopPropagation();
           menuWrap.classList.remove('open');
           card.classList.remove('menu-open');
-          enterEdit();
+          openEditTaskModal(item);
         });
         dropdown.appendChild(editItem);
 
@@ -829,7 +751,6 @@
         });
 
         card.addEventListener('touchstart', (e) => {
-          if (editingNow) return;
           if (e.target.closest('.card-menu, .checklist-row, .card-details-toggle')) return;
           const touch = e.touches[0];
           touchDrag = {
@@ -1046,41 +967,6 @@
   // Shared by desktop drop and touch-drag drop: finds the index to insert at
   // within `zone` based on a vertical coordinate, using the midpoint of each
   // existing (non-dragging) card.
-  // Reads the plain-text content of an edited card's contentEditable div,
-  // reconstructing a '\n' at each block/line boundary. Plain `.textContent`
-  // silently drops line breaks: Shift+Enter (via execCommand('insertText'))
-  // produces a new <div> (with a lone <br> if the line is still empty), not a
-  // literal '\n' character, and .textContent has no separator for those
-  // boundaries at all. `.innerText` was tried and rejected — it double-counts
-  // a trailing empty <div><br></div> line, since the <br> and the div
-  // boundary each independently contribute a break.
-  function extractEditableText(root) {
-    let text = '';
-    function walk(node) {
-      if (node.nodeType === Node.TEXT_NODE) {
-        text += node.nodeValue;
-        return;
-      }
-      if (node.nodeType !== Node.ELEMENT_NODE) return;
-      if (node.tagName === 'BR') {
-        text += '\n';
-        return;
-      }
-      if (node.tagName === 'DIV' || node.tagName === 'P') {
-        text += '\n';
-        const onlyChild = node.childNodes.length === 1 ? node.childNodes[0] : null;
-        if (onlyChild && onlyChild.nodeType === Node.ELEMENT_NODE && onlyChild.tagName === 'BR') {
-          return; // empty-line placeholder — already accounted for by the '\n' above
-        }
-        for (const child of node.childNodes) walk(child);
-        return;
-      }
-      for (const child of node.childNodes) walk(child);
-    }
-    for (const child of root.childNodes) walk(child);
-    return text;
-  }
-
   function computeTargetIndex(zone, clientY) {
     const after = [...zone.querySelectorAll('.card:not(.dragging)')].find(card => {
       const rect = card.getBoundingClientRect();
@@ -1252,15 +1138,22 @@
     return true;
   }
 
-  // Add-task modal -- title/description (stored as line 1 + the rest of
-  // item.text, same convention renderView() already uses to decide what's
-  // always-visible vs. hidden behind "Show details") plus optional
-  // deadline/points, all set up front instead of only after the fact via
-  // the kebab menu.
+  // Add/edit-task modal -- title/description (stored as line 1 + the rest
+  // of item.text, same convention renderView() already uses to decide
+  // what's always-visible vs. hidden behind "Show details") plus optional
+  // deadline/points. Doubles as the task's only editing surface (see issue
+  // #45): taskModalEditId is null while adding a new task (taskModalCol
+  // says which column it'll land in) and holds an existing item's id while
+  // editing one (found fresh via findItem() at submit time, rather than
+  // captured up front, in case something else moved it meanwhile).
   let taskModalCol = null;
+  let taskModalEditId = null;
 
   function openTaskModal(col) {
     taskModalCol = col;
+    taskModalEditId = null;
+    document.getElementById('task-modal-heading').textContent = 'Add a task';
+    document.getElementById('task-modal-submit').textContent = 'Add Task';
     document.getElementById('task-modal-title-input').value = '';
     document.getElementById('task-modal-description-input').value = '';
     document.getElementById('task-modal-deadline-input').value = '';
@@ -1269,9 +1162,24 @@
     document.getElementById('task-modal-title-input').focus();
   }
 
+  function openEditTaskModal(item) {
+    taskModalCol = null;
+    taskModalEditId = item.id;
+    document.getElementById('task-modal-heading').textContent = 'Edit task';
+    document.getElementById('task-modal-submit').textContent = 'Save Changes';
+    const lines = item.text.split('\n');
+    document.getElementById('task-modal-title-input').value = lines[0];
+    document.getElementById('task-modal-description-input').value = lines.slice(1).join('\n');
+    document.getElementById('task-modal-deadline-input').value = item.deadline || '';
+    document.getElementById('task-modal-points-input').value = item.points != null ? item.points : '';
+    document.getElementById('task-modal-backdrop').style.display = 'flex';
+    document.getElementById('task-modal-title-input').focus();
+  }
+
   function closeTaskModal() {
     document.getElementById('task-modal-backdrop').style.display = 'none';
     taskModalCol = null;
+    taskModalEditId = null;
   }
 
   function submitTaskModal() {
@@ -1282,7 +1190,20 @@
     const deadline = document.getElementById('task-modal-deadline-input').value || null;
     const pointsVal = document.getElementById('task-modal-points-input').value;
     const points = pointsVal === '' ? null : Math.max(0, Math.round(Number(pointsVal)));
-    if (!createTask(taskModalCol, text, { deadline: deadline, points: points })) {
+
+    if (taskModalEditId) {
+      const loc = findItem(taskModalEditId);
+      if (loc) {
+        const item = loc.container[loc.col][loc.idx];
+        if (text !== item.text || deadline !== item.deadline || points !== item.points) {
+          pushHistory();
+          item.text = text;
+          item.deadline = deadline;
+          item.points = points;
+          save(state);
+        }
+      }
+    } else if (!createTask(taskModalCol, text, { deadline: deadline, points: points })) {
       alert('Start a sprint before adding tasks here.');
       return;
     }

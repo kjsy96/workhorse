@@ -922,19 +922,8 @@
     opacity: 0.4;
   }
 
-  .card.editing {
-    box-shadow: var(--shadow-hover);
-    z-index: 5;
-  }
-
   .card.menu-open {
     z-index: 6;
-  }
-
-  .card.editing .card-text {
-    cursor: text;
-    box-shadow: 0 0 0 2px rgba(91,124,153,0.35);
-    border-radius: 4px;
   }
 
   .card .pin {
@@ -953,15 +942,6 @@
   .column[data-col="review"] .card .pin { background: var(--review); }
   .column[data-col="done"] .card .pin { background: var(--done); }
 
-  .card-text {
-    font-size: 14.5px;
-    line-height: 1.45;
-    white-space: pre-wrap;
-    word-break: break-word;
-    outline: none;
-  }
-
-  .card.done-state .card-text,
   .card.done-state .card-line-text {
     color: var(--ink-soft);
     text-decoration: line-through;
