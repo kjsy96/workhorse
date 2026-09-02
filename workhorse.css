@@ -369,6 +369,45 @@
     font-style: italic;
   }
 
+  .project-plan {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .project-plan-open {
+    display: inline-block;
+    max-width: 240px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-decoration: none;
+  }
+
+  .project-plan-edit {
+    background: none;
+    border: none;
+    color: var(--ink-soft);
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 6px;
+    transition: color 0.15s ease, background 0.15s ease;
+  }
+
+  .project-plan-edit:hover {
+    color: var(--ink);
+    background: var(--overlay);
+  }
+
+  .plan-modal-hint {
+    font-size: 12px;
+    color: var(--ink-soft);
+    line-height: 1.5;
+    margin: -6px 0 16px;
+  }
+
   .sprint-info-dates {
     color: var(--ink-soft);
   }
