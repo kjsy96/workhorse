@@ -13,6 +13,8 @@ Open `workhorse.html` in Chrome or Edge — no install, no build step, no server
 - **Multi-project boards** — switch between separate named projects via tabs, each with its own columns
 - **Deadlines** — optional due dates per task, with a badge that turns red when overdue
 - **Inline bullets and checkboxes** — lightweight markdown-style syntax (`* item`, `[] item`, `[x] item`) parsed and rendered live, no separate "formatting mode" required
+- **A real add/edit-task modal** — title, an optional multi-line description (hidden behind a "Show details" toggle unless you open it), deadline, and story points, all set up front or changed later from the same form — no separate in-card editing mode to learn
+- **Project Plan & Scope** — point a project at the local file path of its plan/scope document (a Word doc, markdown file, PDF, whatever) and open it in one click from the same toolbar you're already working in
 - **Undo/redo** — full history stack with keyboard shortcuts, that correctly ignores native text-field undo so you don't fight the browser while typing
 - **Real autosave to disk** — connects to a `.json` file on disk via the File System Access API and keeps it in sync on every change, not just `localStorage`
 - **Done-column stacking** — once a column has more than a handful of finished tasks, the extras collapse into an expandable stack so completed work doesn't crowd the board
@@ -35,6 +37,10 @@ Right after release, the app would get stuck on "checking save file…" forever 
 ### A dropdown menu hiding behind other cards
 
 The task card's ⋮ options menu would sometimes render visually behind a neighboring card instead of on top of it. The root cause was that hovering a card applied a CSS `transform`, which creates a new stacking context — and since sibling cards had no explicit `z-index`, a card later in the DOM order could still paint over an earlier card's entire stacking context, dropdown included. A first fix (giving cards a baseline `z-index` that bumps on hover) helped but wasn't complete: the menu could stay open after the mouse moved away, at which point hover state (and its z-index boost) was gone while the menu was still visually open. The real fix was an explicit "menu is open" class, independent of `:hover`, so an open menu stays on top regardless of where the mouse currently is.
+
+### The same menu, clipped at the screen edge — and a CSS gotcha hiding under the fix
+
+Later, that same dropdown started getting clipped for cards near the bottom of the board, since it was still positioned relative to its card with no awareness of the viewport. The obvious fix — `position: fixed`, computed in JS to stay on-screen — measurably computed the right coordinates and then rendered in the wrong place anyway, but only while the card was hovered. The cause: that same hover `transform` from the bug above makes its element a *containing block* for any `position: fixed` descendant, so the menu was being positioned relative to the transformed card instead of the viewport. The real fix moved the dropdown out of the card's DOM subtree entirely (appended to `<body>`, tracked by its own `.open` class), sidestepping the containing-block rule altogether rather than fighting it.
 
 ## Browser support
 
