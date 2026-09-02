@@ -12,6 +12,22 @@
     return new Date(y, m - 1, d).toLocaleDateString(undefined, opts);
   }
 
+  // A lightweight refresh for just the burndown chart, called after an
+  // existing sprint item's points or completed-date changes from the kebab
+  // menu -- those handlers (in workhorse-render.js) deliberately skip a
+  // full render() to avoid re-stealing focus mid-edit (the historical
+  // "typing loses focus" bug class), so this is how the chart still picks
+  // up a change that affects its math without one. Safe to call from
+  // workhorse-render.js despite loading after it, since by the time a user
+  // can trigger these handlers every script has already finished loading --
+  // same reasoning as render() itself calling renderProjectToolbar().
+  function refreshBurndown() {
+    const proj = activeProject();
+    if (proj.mode === 'scrum' && proj.activeSprint) {
+      renderBurndownChart(document.getElementById('burndown-container'), proj.activeSprint);
+    }
+  }
+
   function renderProjectToolbar() {
     const proj = activeProject();
     const toolbar = document.getElementById('project-toolbar');
@@ -558,21 +574,44 @@
     return Math.max(0, Math.min(1, (cur - start) / (end - start)));
   }
 
+  // Current total scope of the sprint (every item currently in it,
+  // regardless of completion) -- distinct from sprint.startingTotal, which
+  // is frozen the moment the sprint begins and never moves again. Comparing
+  // the two is how renderBurndownChart notices scope added after the
+  // sprint started (a new task dropped in, or points bumped on an existing
+  // one) instead of silently clipping the remaining line at the original
+  // total.
+  function currentSprintTotal(sprint) {
+    const all = sprint.todo.concat(sprint.doing, sprint.review, sprint.done);
+    return sprint.unit === 'points'
+      ? all.reduce((sum, i) => sum + (i.points || 0), 0)
+      : all.length;
+  }
+
   function renderBurndownChart(container, sprint) {
-    const total = sprint.startingTotal;
+    const startingTotal = sprint.startingTotal;
     const unitLabel = sprint.unit === 'points' ? 'points' : 'tasks';
 
-    if (total <= 0) {
+    if (startingTotal <= 0) {
       container.innerHTML =
         '<div class="burndown-empty">No ' + unitLabel + ' to burn down yet — this sprint started empty.</div>';
       return;
     }
 
+    const currentTotal = currentSprintTotal(sprint);
+    // remainingAsOf() for any day is always <= currentTotal -- both read
+    // from the sprint's *current* item membership, remainingAsOf just
+    // additionally filters out whatever was already completed by that day
+    // -- so scaling to the larger of these two totals is enough to
+    // guarantee nothing plotted ever clips off the top of the chart, no
+    // matter when the scope grew.
+    const scaleMax = Math.max(startingTotal, currentTotal);
+
     const W = 640, H = 200, PAD = 32;
     const x = (dateStr) => PAD + dateFraction(dateStr, sprint.startDate, sprint.endDate) * (W - PAD * 2);
-    const y = (remaining) => PAD + (1 - Math.max(0, Math.min(1, remaining / total))) * (H - PAD * 2);
+    const y = (remaining) => PAD + (1 - Math.max(0, Math.min(1, remaining / scaleMax))) * (H - PAD * 2);
 
-    const idealPath = 'M ' + x(sprint.startDate) + ' ' + y(total) + ' L ' + x(sprint.endDate) + ' ' + y(0);
+    const idealPath = 'M ' + x(sprint.startDate) + ' ' + y(startingTotal) + ' L ' + x(sprint.endDate) + ' ' + y(0);
 
     // One point per day from the sprint's start through today (or its end
     // date, if that's already passed) -- fully recomputed on every render,
@@ -586,10 +625,17 @@
       '<circle cx="' + x(p.date) + '" cy="' + y(p.remaining) + '" r="3" class="burndown-dot" />'
     ).join('');
 
+    // Scope unchanged since the sprint started: the simple "N at start"
+    // framing still holds. Once it's grown, call out both numbers so it
+    // reads as "scope was added," not as a stale or wrong count.
+    const headerText = currentTotal === startingTotal
+      ? startingTotal + ' ' + unitLabel + ' at start'
+      : currentTotal + ' ' + unitLabel + ' now (started with ' + startingTotal + ')';
+
     container.innerHTML =
       '<div class="burndown-header">' +
         '<span class="burndown-title">Burndown</span>' +
-        '<span class="burndown-unit">' + total + ' ' + unitLabel + ' at start</span>' +
+        '<span class="burndown-unit">' + headerText + '</span>' +
       '</div>' +
       '<svg viewBox="0 0 ' + W + ' ' + H + '" class="burndown-svg" preserveAspectRatio="none">' +
         '<line x1="' + PAD + '" y1="' + (H - PAD) + '" x2="' + (W - PAD) + '" y2="' + (H - PAD) + '" class="burndown-axis" />' +
@@ -599,7 +645,7 @@
         dots +
         '<text x="' + PAD + '" y="' + (H - 10) + '" class="burndown-label">' + formatSprintDate(sprint.startDate) + '</text>' +
         '<text x="' + (W - PAD) + '" y="' + (H - 10) + '" class="burndown-label" text-anchor="end">' + formatSprintDate(sprint.endDate) + '</text>' +
-        '<text x="' + (PAD - 8) + '" y="' + (PAD + 4) + '" class="burndown-label" text-anchor="end">' + total + '</text>' +
+        '<text x="' + (PAD - 8) + '" y="' + (PAD + 4) + '" class="burndown-label" text-anchor="end">' + scaleMax + '</text>' +
         '<text x="' + (PAD - 8) + '" y="' + (H - PAD + 4) + '" class="burndown-label" text-anchor="end">0</text>' +
       '</svg>';
   }
