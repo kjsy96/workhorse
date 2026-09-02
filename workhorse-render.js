@@ -1,3 +1,43 @@
+  // Lucide-style outline icons (matching Claude Code's own minimal
+  // stroke-icon look) -- inline SVG rather than a font/icon library, since
+  // this app has no external dependencies beyond the two Google Fonts.
+  const COPY_ICON_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+  const CHECK_ICON_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+
+  // Writes `text` to the clipboard and briefly swaps `btn`'s icon to a
+  // checkmark as confirmation. Tries the modern Clipboard API first (file://
+  // pages are a secure context in Chrome/Edge, so this works without a
+  // server); falls back to a hidden-textarea + execCommand('copy') for
+  // browsers/contexts where navigator.clipboard isn't available, matching
+  // this codebase's existing execCommand-fallback pattern elsewhere.
+  function copyTaskText(text, btn) {
+    function showCopied() {
+      btn.innerHTML = CHECK_ICON_SVG;
+      btn.classList.add('copied');
+      clearTimeout(btn._copyResetTimer);
+      btn._copyResetTimer = setTimeout(() => {
+        btn.innerHTML = COPY_ICON_SVG;
+        btn.classList.remove('copied');
+      }, 1200);
+    }
+    function fallbackCopy() {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      try { document.execCommand('copy'); showCopied(); } catch (e) {}
+      document.body.removeChild(ta);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(showCopied, fallbackCopy);
+    } else {
+      fallbackCopy();
+    }
+  }
+
   function formatDate(ts) {
     const d = new Date(ts);
     const opts = { month: 'short', day: 'numeric' };
@@ -388,6 +428,18 @@
 
         renderView();
 
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'card-copy-btn';
+        copyBtn.type = 'button';
+        copyBtn.title = 'Copy task text';
+        copyBtn.innerHTML = COPY_ICON_SVG;
+        copyBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          copyTaskText(item.text, copyBtn);
+        });
+        copyBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+        card.appendChild(copyBtn);
+
         const menuWrap = document.createElement('div');
         menuWrap.className = 'card-menu';
 
@@ -751,7 +803,7 @@
         });
 
         card.addEventListener('touchstart', (e) => {
-          if (e.target.closest('.card-menu, .checklist-row, .card-details-toggle')) return;
+          if (e.target.closest('.card-menu, .checklist-row, .card-details-toggle, .card-copy-btn')) return;
           const touch = e.touches[0];
           touchDrag = {
             itemId: item.id,

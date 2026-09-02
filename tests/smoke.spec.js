@@ -1436,3 +1436,52 @@ test('a plan path pasted with surrounding quotes (Explorer "Copy as path") still
   await page.locator('.project-plan-edit').click();
   await expect(page.locator('#plan-path-input')).toHaveValue('C:\\Users\\Kevin\\Documents\\Project X\\Plan.docx');
 });
+
+test('copy button copies the task text to the clipboard and shows confirmation (issue #55)', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.goto(APP_URL);
+  await page.evaluate(() => {
+    const backdrop = document.getElementById('save-warning-backdrop');
+    if (backdrop) backdrop.style.display = 'none';
+  });
+
+  await page.locator('.add-task-btn[data-col="todo"]').click();
+  await page.locator('#task-modal-title-input').fill('Copy me');
+  await page.locator('#task-modal-description-input').fill('Line two\n* a bullet');
+  await page.locator('#task-modal-submit').click();
+
+  const card = page.locator('.card', { hasText: 'Copy me' });
+  await card.hover();
+  const copyBtn = card.locator('.card-copy-btn');
+  await expect(copyBtn).toBeVisible();
+  await copyBtn.click();
+
+  // Windows' native clipboard always normalizes to CRLF line endings, so
+  // \n round-trips as \r\n -- that's platform behavior, not a bug here.
+  const clip = await page.evaluate(() => navigator.clipboard.readText());
+  expect(clip.replace(/\r\n/g, '\n')).toBe('Copy me\nLine two\n* a bullet');
+
+  await expect(copyBtn).toHaveClass(/copied/);
+  await page.waitForTimeout(1400);
+  await expect(copyBtn).not.toHaveClass(/copied/);
+});
+
+test('tapping the copy button on a touch device does not arm a drag', async ({ page }) => {
+  await page.goto(APP_URL);
+  await page.evaluate(() => {
+    const backdrop = document.getElementById('save-warning-backdrop');
+    if (backdrop) backdrop.style.display = 'none';
+  });
+  await addTask(page, 'todo', 'Touch test task');
+  const card = page.locator('.card', { hasText: 'Touch test task' });
+  const box = await card.locator('.card-copy-btn').boundingBox();
+
+  await page.evaluate(({ x, y }) => {
+    const el = document.elementFromPoint(x, y);
+    const touch = new Touch({ identifier: 1, target: el, clientX: x, clientY: y });
+    el.dispatchEvent(new TouchEvent('touchstart', { touches: [touch], targetTouches: [touch], changedTouches: [touch], bubbles: true, cancelable: true }));
+  }, { x: box.x + box.width / 2, y: box.y + box.height / 2 });
+
+  await page.waitForTimeout(600); // longer than TOUCH_LONG_PRESS_MS
+  await expect(card).not.toHaveClass(/dragging/);
+});

@@ -1089,11 +1089,42 @@
   }
 
   .card:hover .card-menu-btn { opacity: 1; }
-  .card.editing .card-menu-btn { opacity: 1; }
   .card-menu.open .card-menu-btn {
     opacity: 1;
     color: var(--ink);
     background: var(--overlay);
+  }
+
+  /* Sits directly under the kebab button, same reveal-on-hover pattern.
+     Not nested inside .card-menu -- it's an independent action, not part of
+     the dropdown menu, so it shouldn't participate in the menu's own
+     open/close click-outside logic. */
+  .card-copy-btn {
+    position: absolute;
+    top: 34px;
+    right: 8px;
+    background: none;
+    border: none;
+    color: var(--ink-soft);
+    cursor: pointer;
+    padding: 3px;
+    border-radius: 4px;
+    line-height: 1;
+    display: flex;
+    opacity: 0;
+    transition: opacity .15s ease, color .15s ease, background .15s ease;
+  }
+
+  .card:hover .card-copy-btn { opacity: 1; }
+
+  .card-copy-btn:hover {
+    color: var(--ink);
+    background: var(--overlay);
+  }
+
+  .card-copy-btn.copied {
+    opacity: 1;
+    color: var(--done);
   }
 
   /* Appended directly to <body> in JS (not left nested under .card-menu) and
