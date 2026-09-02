@@ -551,8 +551,20 @@
   // break URL parsing, but a Windows drive letter's colon (e.g. "C:") is
   // deliberately left un-encoded -- it has to stay literal for the URL to
   // resolve to that drive at all.
+  // Explorer's right-click "Copy as path" wraps its result in straight
+  // double quotes (e.g. "C:\Users\...\Plan.docx") -- exactly the paste
+  // workflow this feature is built around, so a quoted path has to just
+  // work rather than requiring the user to manually edit them out first.
+  function stripSurroundingQuotes(str) {
+    const trimmed = str.trim();
+    if (trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"')) {
+      return trimmed.slice(1, -1).trim();
+    }
+    return trimmed;
+  }
+
   function pathToFileUrl(rawPath) {
-    const path = rawPath.trim().replace(/\\/g, '/');
+    const path = stripSurroundingQuotes(rawPath).replace(/\\/g, '/');
     const driveMatch = path.match(/^([a-zA-Z]:)\/(.*)$/);
     if (driveMatch) {
       return 'file:///' + driveMatch[1] + '/' + driveMatch[2].split('/').map(encodeURIComponent).join('/');
@@ -615,7 +627,7 @@
 
   function savePlanPath(newPath) {
     if (!planModalProj) return;
-    const normalized = (newPath || '').trim() || null;
+    const normalized = stripSurroundingQuotes(newPath || '') || null;
     if (normalized !== planModalProj.planPath) {
       pushHistory();
       planModalProj.planPath = normalized;

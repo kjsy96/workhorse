@@ -1412,3 +1412,27 @@ test('a project with no planPath field (pre-issue-#48 save file) loads without e
   await expect(page.locator('.project-plan .save-status-btn', { hasText: 'Project Plan' })).toBeVisible();
   expect(errors, 'no console/page errors loading a pre-#48 project with no planPath').toEqual([]);
 });
+
+test('a plan path pasted with surrounding quotes (Explorer "Copy as path") still works (issue #53)', async ({ page }) => {
+  await page.goto(APP_URL);
+  await page.evaluate(() => {
+    const backdrop = document.getElementById('save-warning-backdrop');
+    if (backdrop) backdrop.style.display = 'none';
+  });
+
+  await page.locator('.project-plan .save-status-btn', { hasText: 'Project Plan' }).click();
+  await page.locator('#plan-path-input').fill('"C:\\Users\\Kevin\\Documents\\Project X\\Plan.docx"');
+  await page.locator('#plan-modal-submit').click();
+
+  const link = page.locator('.project-plan-open');
+  await expect(link).toBeVisible();
+  // Quotes should be stripped from the displayed filename too, not just the URL.
+  await expect(link).toContainText('Plan.docx');
+  await expect(link).not.toContainText('"');
+  const href = await link.getAttribute('href');
+  expect(href).toBe('file:///C:/Users/Kevin/Documents/Project%20X/Plan.docx');
+
+  // Reopening the edit modal should show the clean, unquoted path too.
+  await page.locator('.project-plan-edit').click();
+  await expect(page.locator('#plan-path-input')).toHaveValue('C:\\Users\\Kevin\\Documents\\Project X\\Plan.docx');
+});
