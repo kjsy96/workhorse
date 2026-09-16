@@ -275,6 +275,572 @@
     render();
   }
 
+  // Builds one card's full DOM element -- list-view text/bullets/checkboxes,
+  // copy button, kebab menu (with every field row: edit, created, deadline,
+  // points, completed, send-to-other-pool, move-to-project, delete), footer
+  // badges, and both drag-and-drop paths (desktop native DnD + touch). Split
+  // out of renderBoard() (issue #57) so that function is left as a thinner
+  // per-column loop; behavior is unchanged, this is a pure extraction.
+  function buildCard(item, col, container, proj) {
+    const card = document.createElement('div');
+    card.className = 'card' + (col === 'done' ? ' done-state' : '');
+    card.draggable = true;
+    card.dataset.id = item.id;
+
+    const pin = document.createElement('div');
+    pin.className = 'pin';
+    card.appendChild(pin);
+
+    const listView = document.createElement('div');
+    listView.className = 'card-list-view';
+    card.appendChild(listView);
+
+    function parseLine(line) {
+      const bulletMatch = line.match(/^(\s*)[*-]\s+(.*)$/);
+      if (bulletMatch) return { type: 'bullet', content: bulletMatch[2] };
+      const checkMatch = line.match(/^(\s*)\[( |x|X)?\]\s+(.*)$/);
+      if (checkMatch) return { type: 'checkbox', checked: (checkMatch[2] || '').toLowerCase() === 'x', content: checkMatch[3] };
+      return { type: 'text', content: line };
+    }
+
+    function toggleCheckboxLine(lineIdx, checked) {
+      const lines = item.text.split('\n');
+      const line = lines[lineIdx];
+      const match = line.match(/^(\s*)\[( |x|X)?\](\s+.*)$/);
+      if (match) {
+        lines[lineIdx] = match[1] + '[' + (checked ? 'x' : ' ') + ']' + match[3];
+        item.text = lines.join('\n');
+      }
+    }
+
+    // Appends parsed content for `subset` (a slice of the card's full
+    // line array) into `container`. `offset` is subset's starting index
+    // within the *full* array, so checkbox toggling still writes back to
+    // the right line no matter which container (title vs description) a
+    // checkbox line ends up rendered into.
+    function renderLines(lineContainer, subset, offset) {
+      let currentList = null;
+      subset.forEach((rawLine, i) => {
+        const idx = offset + i;
+        if (rawLine.trim() === '') {
+          currentList = null;
+          const spacer = document.createElement('div');
+          spacer.className = 'card-line-text';
+          spacer.innerHTML = '&nbsp;';
+          lineContainer.appendChild(spacer);
+          return;
+        }
+        const parsed = parseLine(rawLine);
+        if (parsed.type === 'bullet') {
+          if (!currentList) {
+            currentList = document.createElement('ul');
+            currentList.className = 'card-bullet-list';
+            lineContainer.appendChild(currentList);
+          }
+          const li = document.createElement('li');
+          li.textContent = parsed.content;
+          currentList.appendChild(li);
+        } else if (parsed.type === 'checkbox') {
+          currentList = null;
+          const row = document.createElement('label');
+          row.className = 'checklist-row' + (parsed.checked ? ' checked' : '');
+          row.addEventListener('mousedown', (e) => e.stopPropagation());
+          row.addEventListener('click', (e) => e.stopPropagation());
+          const cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.checked = parsed.checked;
+          cb.addEventListener('change', () => {
+            pushHistory();
+            toggleCheckboxLine(idx, cb.checked);
+            save(state);
+            row.classList.toggle('checked', cb.checked);
+          });
+          const span = document.createElement('span');
+          span.textContent = parsed.content;
+          row.appendChild(cb);
+          row.appendChild(span);
+          lineContainer.appendChild(row);
+        } else {
+          currentList = null;
+          const p = document.createElement('div');
+          p.className = 'card-line-text';
+          p.textContent = parsed.content;
+          lineContainer.appendChild(p);
+        }
+      });
+    }
+
+    // Line 1 is the card's title -- always shown, parsed the same as any
+    // other line (so a single-line checkbox/bullet "title" -- the common
+    // shape for a quick-captured task -- stays a fully interactive
+    // checkbox/bullet, not plain text). Lines 2+ are its description,
+    // hidden by default behind a "Show details" toggle so a lengthy task
+    // doesn't dominate the column; expandedCards (ephemeral, keyed by
+    // item id) tracks which cards currently have it open.
+    function renderView() {
+      listView.innerHTML = '';
+      const existingDesc = card.querySelector('.card-description-view');
+      if (existingDesc) existingDesc.remove();
+      const existingToggle = card.querySelector('.card-details-toggle');
+      if (existingToggle) existingToggle.remove();
+
+      const lines = item.text.split('\n');
+      const descLines = lines.slice(1);
+      const hasDescription = descLines.some(l => l.trim() !== '');
+
+      renderLines(listView, lines.slice(0, 1), 0);
+
+      if (hasDescription) {
+        const isExpanded = expandedCards.has(item.id);
+
+        const toggleBtn = document.createElement('button');
+        toggleBtn.className = 'card-details-toggle';
+        toggleBtn.textContent = isExpanded ? 'Hide details' : 'Show details';
+        toggleBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+        toggleBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (isExpanded) expandedCards.delete(item.id); else expandedCards.add(item.id);
+          renderView();
+        });
+        listView.insertAdjacentElement('afterend', toggleBtn);
+
+        if (isExpanded) {
+          const descView = document.createElement('div');
+          descView.className = 'card-list-view card-description-view';
+          toggleBtn.insertAdjacentElement('afterend', descView);
+          renderLines(descView, descLines, 1);
+        }
+      }
+    }
+
+    renderView();
+
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'card-copy-btn';
+    copyBtn.type = 'button';
+    copyBtn.title = 'Copy task text';
+    copyBtn.innerHTML = COPY_ICON_SVG;
+    copyBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      copyTaskText(item.text, copyBtn);
+    });
+    copyBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+    card.appendChild(copyBtn);
+
+    const menuWrap = document.createElement('div');
+    menuWrap.className = 'card-menu';
+
+    const menuBtn = document.createElement('button');
+    menuBtn.className = 'card-menu-btn';
+    menuBtn.textContent = '⋮';
+    menuBtn.title = 'Task options';
+    menuWrap.appendChild(menuBtn);
+
+    const dropdown = document.createElement('div');
+    dropdown.className = 'card-menu-dropdown';
+
+    const editItem = document.createElement('button');
+    editItem.className = 'card-menu-item';
+    editItem.textContent = 'Edit task';
+    editItem.addEventListener('click', (e) => {
+      e.stopPropagation();
+      menuWrap.classList.remove('open');
+      card.classList.remove('menu-open');
+      openEditTaskModal(item);
+    });
+    dropdown.appendChild(editItem);
+
+    const createdDivider = document.createElement('div');
+    createdDivider.className = 'card-menu-divider';
+    dropdown.appendChild(createdDivider);
+
+    const createdRow = document.createElement('div');
+    createdRow.className = 'card-menu-deadline-row';
+    const createdLabel = document.createElement('span');
+    createdLabel.className = 'card-menu-label';
+    createdLabel.textContent = 'Created on';
+    createdRow.appendChild(createdLabel);
+    const createdInput = document.createElement('input');
+    createdInput.type = 'date';
+    createdInput.className = 'card-menu-date-input';
+    createdInput.value = dateStrFromTimestamp(item.created);
+    createdInput.addEventListener('click', (e) => e.stopPropagation());
+    createdInput.addEventListener('mousedown', (e) => e.stopPropagation());
+    createdRow.appendChild(createdInput);
+    dropdown.appendChild(createdRow);
+
+    const deadlineDivider = document.createElement('div');
+    deadlineDivider.className = 'card-menu-divider';
+    dropdown.appendChild(deadlineDivider);
+
+    const deadlineRow = document.createElement('div');
+    deadlineRow.className = 'card-menu-deadline-row';
+    const deadlineLabel = document.createElement('span');
+    deadlineLabel.className = 'card-menu-label';
+    deadlineLabel.textContent = 'Deadline';
+    deadlineRow.appendChild(deadlineLabel);
+    const deadlineInput = document.createElement('input');
+    deadlineInput.type = 'date';
+    deadlineInput.className = 'card-menu-date-input';
+    if (item.deadline) deadlineInput.value = item.deadline;
+    deadlineInput.addEventListener('click', (e) => e.stopPropagation());
+    deadlineInput.addEventListener('mousedown', (e) => e.stopPropagation());
+    deadlineRow.appendChild(deadlineInput);
+    dropdown.appendChild(deadlineRow);
+
+    const clearDeadlineBtn = document.createElement('button');
+    clearDeadlineBtn.className = 'card-menu-item';
+    clearDeadlineBtn.textContent = 'Clear deadline';
+    clearDeadlineBtn.style.display = item.deadline ? '' : 'none';
+    clearDeadlineBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      pushHistory();
+      item.deadline = null;
+      deadlineInput.value = '';
+      refreshDeadlineUI();
+      save(state);
+    });
+    dropdown.appendChild(clearDeadlineBtn);
+
+    const pointsDivider = document.createElement('div');
+    pointsDivider.className = 'card-menu-divider';
+    dropdown.appendChild(pointsDivider);
+
+    const pointsRow = document.createElement('div');
+    pointsRow.className = 'card-menu-deadline-row';
+    const pointsLabel = document.createElement('span');
+    pointsLabel.className = 'card-menu-label';
+    pointsLabel.textContent = 'Points';
+    pointsRow.appendChild(pointsLabel);
+    const pointsInput = document.createElement('input');
+    pointsInput.type = 'number';
+    pointsInput.min = '0';
+    pointsInput.className = 'card-menu-date-input';
+    if (item.points != null) pointsInput.value = item.points;
+    pointsInput.addEventListener('click', (e) => e.stopPropagation());
+    pointsInput.addEventListener('mousedown', (e) => e.stopPropagation());
+    pointsRow.appendChild(pointsInput);
+    dropdown.appendChild(pointsRow);
+
+    const clearPointsBtn = document.createElement('button');
+    clearPointsBtn.className = 'card-menu-item';
+    clearPointsBtn.textContent = 'Clear points';
+    clearPointsBtn.style.display = item.points != null ? '' : 'none';
+    clearPointsBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      pushHistory();
+      item.points = null;
+      pointsInput.value = '';
+      refreshPointsUI();
+      save(state);
+      refreshBurndown();
+    });
+    dropdown.appendChild(clearPointsBtn);
+
+    // Only meaningful for a task currently sitting in a Done column --
+    // Kanban's own, or a sprint's -- lets the user see/backdate when it
+    // actually finished. completedAt itself is kept in sync
+    // automatically elsewhere (dragging in/out of Done, sendToOtherPool,
+    // moveItemToProject); this field only ever edits the date, never
+    // clears it, since "in Done with no completion date" would break
+    // the invariant (relied on by the Scrum burndown formula, and now
+    // also by the completion-date footer badge below) that completedAt
+    // is set iff the item is in a Done column.
+    const isDone = isDoneContainer(proj, container, col);
+
+    const completedDivider = document.createElement('div');
+    completedDivider.className = 'card-menu-divider';
+    completedDivider.style.display = isDone ? '' : 'none';
+    dropdown.appendChild(completedDivider);
+
+    const completedRow = document.createElement('div');
+    completedRow.className = 'card-menu-deadline-row';
+    completedRow.style.display = isDone ? '' : 'none';
+    const completedLabel = document.createElement('span');
+    completedLabel.className = 'card-menu-label';
+    completedLabel.textContent = 'Completed on';
+    completedRow.appendChild(completedLabel);
+    const completedInput = document.createElement('input');
+    completedInput.type = 'date';
+    completedInput.className = 'card-menu-date-input';
+    if (item.completedAt) completedInput.value = item.completedAt;
+    completedInput.addEventListener('click', (e) => e.stopPropagation());
+    completedInput.addEventListener('mousedown', (e) => e.stopPropagation());
+    completedRow.appendChild(completedInput);
+    dropdown.appendChild(completedRow);
+
+    let completedHistoryPushed = false;
+    completedInput.addEventListener('focus', () => {
+      completedHistoryPushed = false;
+    });
+    completedInput.addEventListener('change', (e) => {
+      if (!completedHistoryPushed) {
+        pushHistory();
+        completedHistoryPushed = true;
+      }
+      item.completedAt = e.target.value || todayDateStr();
+      refreshCompletedUI();
+      save(state);
+      refreshBurndown();
+    });
+
+    const sendDivider = document.createElement('div');
+    sendDivider.className = 'card-menu-divider';
+    dropdown.appendChild(sendDivider);
+
+    const inKanbanPool = col !== 'backlog' && resolveContainer(proj, col) === proj;
+    const sendBtn = document.createElement('button');
+    sendBtn.className = 'card-menu-item';
+    sendBtn.textContent = inKanbanPool ? 'Send to Scrum' : 'Send to Kanban';
+    sendBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      sendToOtherPool(item.id);
+    });
+    dropdown.appendChild(sendBtn);
+
+    if (state.projects.length > 1) {
+      const divider1 = document.createElement('div');
+      divider1.className = 'card-menu-divider';
+      dropdown.appendChild(divider1);
+
+      const moveLabel = document.createElement('div');
+      moveLabel.className = 'card-menu-section-label';
+      moveLabel.textContent = 'Move to';
+      dropdown.appendChild(moveLabel);
+
+      state.projects.forEach(p => {
+        if (p.id === state.activeProjectId) return;
+        const moveBtn = document.createElement('button');
+        moveBtn.className = 'card-menu-item';
+        moveBtn.textContent = p.name;
+        moveBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          moveItemToProject(item.id, p.id);
+          render();
+        });
+        dropdown.appendChild(moveBtn);
+      });
+    }
+
+    const divider2 = document.createElement('div');
+    divider2.className = 'card-menu-divider';
+    dropdown.appendChild(divider2);
+
+    const deleteItem = document.createElement('button');
+    deleteItem.className = 'card-menu-item card-menu-delete';
+    deleteItem.textContent = 'Delete task';
+    deleteItem.addEventListener('click', (e) => {
+      e.stopPropagation();
+      removeItem(item.id);
+      render();
+    });
+    dropdown.appendChild(deleteItem);
+
+    // Appended to <body>, not menuWrap -- see the .card-menu-dropdown
+    // comment in workhorse.css for why it can't stay nested under the
+    // card and still use position: fixed reliably. Stashing menuBtn
+    // directly on the node (a plain JS property, not an HTML attribute)
+    // is how repositionOpenCardMenu finds the right anchor on scroll/
+    // resize, since dropdown and menuBtn are no longer DOM relatives.
+    dropdown._menuBtn = menuBtn;
+    document.body.appendChild(dropdown);
+
+    menuBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isOpen = dropdown.classList.contains('open');
+      closeAllCardMenus();
+      if (!isOpen) {
+        menuWrap.classList.add('open');
+        card.classList.add('menu-open');
+        dropdown.classList.add('open');
+        positionCardMenuDropdown(menuBtn, dropdown);
+      }
+    });
+    menuBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+
+    card.appendChild(menuWrap);
+
+    const footerRow = document.createElement('div');
+    footerRow.className = 'card-footer';
+
+    const dateWrap = document.createElement('div');
+    dateWrap.className = 'card-dates';
+
+    const date = document.createElement('span');
+    date.className = 'card-date';
+    date.textContent = formatDate(item.created);
+    dateWrap.appendChild(date);
+
+    const deadlineBadge = document.createElement('span');
+    deadlineBadge.className = 'card-deadline';
+    deadlineBadge.style.display = 'none';
+    dateWrap.appendChild(deadlineBadge);
+
+    const pointsBadge = document.createElement('span');
+    pointsBadge.className = 'card-points';
+    pointsBadge.style.display = 'none';
+    dateWrap.appendChild(pointsBadge);
+
+    // A sibling of dateWrap (not a child of it) so .card-footer's
+    // existing justify-content: space-between pushes it to the opposite
+    // corner from creation date/deadline/points, instead of just
+    // trailing after them in the same left-aligned group.
+    const completedBadge = document.createElement('span');
+    completedBadge.className = 'card-completed';
+    completedBadge.style.display = 'none';
+
+    function refreshCompletedUI() {
+      if (item.completedAt) {
+        completedBadge.style.display = '';
+        completedBadge.textContent = 'done ' + formatDeadline(item.completedAt);
+      } else {
+        completedBadge.style.display = 'none';
+      }
+    }
+    refreshCompletedUI();
+
+    function refreshDeadlineUI() {
+      if (item.deadline) {
+        deadlineBadge.style.display = '';
+        deadlineBadge.className = 'card-deadline' + (isOverdue(item.deadline, col) ? ' overdue' : '');
+        deadlineBadge.textContent = 'due ' + formatDeadline(item.deadline);
+        clearDeadlineBtn.style.display = '';
+      } else {
+        deadlineBadge.style.display = 'none';
+        clearDeadlineBtn.style.display = 'none';
+      }
+    }
+    refreshDeadlineUI();
+
+    function refreshPointsUI() {
+      if (item.points != null) {
+        pointsBadge.style.display = '';
+        pointsBadge.textContent = item.points + ' pt' + (item.points === 1 ? '' : 's');
+        clearPointsBtn.style.display = '';
+      } else {
+        pointsBadge.style.display = 'none';
+        clearPointsBtn.style.display = 'none';
+      }
+    }
+    refreshPointsUI();
+
+    let createdHistoryPushed = false;
+    createdInput.addEventListener('focus', () => {
+      createdHistoryPushed = false;
+    });
+    createdInput.addEventListener('change', (e) => {
+      const val = e.target.value;
+      if (!val) { createdInput.value = dateStrFromTimestamp(item.created); return; } // never allow clearing -- every item has a creation date
+      if (!createdHistoryPushed) {
+        pushHistory();
+        createdHistoryPushed = true;
+      }
+      // item.created is a timestamp, but only ever read back out through
+      // formatDate()/dateStrFromTimestamp(), both local-time -- build the
+      // new timestamp from local date parts too (not `new Date(val)`,
+      // which parses a bare 'YYYY-MM-DD' as UTC midnight and would
+      // silently shift a day in negative-UTC timezones).
+      const [y, m, d] = val.split('-').map(Number);
+      item.created = new Date(y, m - 1, d).getTime();
+      date.textContent = formatDate(item.created);
+      save(state);
+    });
+
+    let deadlineHistoryPushed = false;
+    deadlineInput.addEventListener('focus', () => {
+      deadlineHistoryPushed = false;
+    });
+    deadlineInput.addEventListener('change', (e) => {
+      if (!deadlineHistoryPushed) {
+        pushHistory();
+        deadlineHistoryPushed = true;
+      }
+      item.deadline = e.target.value || null;
+      refreshDeadlineUI();
+      save(state);
+    });
+
+    let pointsHistoryPushed = false;
+    pointsInput.addEventListener('focus', () => {
+      pointsHistoryPushed = false;
+    });
+    pointsInput.addEventListener('change', (e) => {
+      if (!pointsHistoryPushed) {
+        pushHistory();
+        pointsHistoryPushed = true;
+      }
+      const val = e.target.value;
+      item.points = val === '' ? null : Math.max(0, Math.round(Number(val)));
+      refreshPointsUI();
+      save(state);
+      refreshBurndown();
+    });
+
+    footerRow.appendChild(dateWrap);
+    footerRow.appendChild(completedBadge);
+    card.appendChild(footerRow);
+
+    card.addEventListener('dragstart', (e) => {
+      card.classList.add('dragging');
+      e.dataTransfer.setData('text/plain', item.id);
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    card.addEventListener('dragend', () => {
+      card.classList.remove('dragging');
+    });
+
+    card.addEventListener('touchstart', (e) => {
+      if (e.target.closest('.card-menu, .checklist-row, .card-details-toggle, .card-copy-btn')) return;
+      const touch = e.touches[0];
+      touchDrag = {
+        itemId: item.id,
+        originCard: card,
+        startX: touch.clientX,
+        startY: touch.clientY,
+        armed: false,
+        ghost: null,
+        ghostOffsetX: 0,
+        ghostOffsetY: 0,
+        currentDropEl: null,
+        scrollSpeed: 0,
+        rafId: null,
+        longPressTimer: null
+      };
+      touchDrag.longPressTimer = setTimeout(armTouchDrag, TOUCH_LONG_PRESS_MS);
+    }, { passive: true });
+
+    card.addEventListener('touchmove', (e) => {
+      if (!touchDrag || touchDrag.originCard !== card) return;
+      const touch = e.touches[0];
+      if (!touchDrag.armed) {
+        const dx = touch.clientX - touchDrag.startX;
+        const dy = touch.clientY - touchDrag.startY;
+        if (Math.hypot(dx, dy) > TOUCH_MOVE_CANCEL_PX) {
+          cleanupTouchDrag();
+        }
+        return;
+      }
+      e.preventDefault();
+      updateTouchDragPosition(touch.clientX, touch.clientY);
+    }, { passive: false });
+
+    card.addEventListener('touchend', () => {
+      if (!touchDrag || touchDrag.originCard !== card) return;
+      if (touchDrag.armed) {
+        finishTouchDrag();
+      } else {
+        cleanupTouchDrag();
+      }
+    }, { passive: true });
+
+    card.addEventListener('touchcancel', () => {
+      if (!touchDrag || touchDrag.originCard !== card) return;
+      cleanupTouchDrag();
+    }, { passive: true });
+
+    return card;
+  }
+
   function renderBoard() {
     const proj = activeProject();
     // Card menu dropdowns live in document.body, not nested under their
@@ -295,563 +861,7 @@
       const visibleItems = (stackActive && !isStackExpanded) ? items.slice(0, DONE_STACK_VISIBLE_COUNT) : items;
 
       visibleItems.forEach(item => {
-        const card = document.createElement('div');
-        card.className = 'card' + (col === 'done' ? ' done-state' : '');
-        card.draggable = true;
-        card.dataset.id = item.id;
-
-        const pin = document.createElement('div');
-        pin.className = 'pin';
-        card.appendChild(pin);
-
-        const listView = document.createElement('div');
-        listView.className = 'card-list-view';
-        card.appendChild(listView);
-
-        function parseLine(line) {
-          const bulletMatch = line.match(/^(\s*)[*-]\s+(.*)$/);
-          if (bulletMatch) return { type: 'bullet', content: bulletMatch[2] };
-          const checkMatch = line.match(/^(\s*)\[( |x|X)?\]\s+(.*)$/);
-          if (checkMatch) return { type: 'checkbox', checked: (checkMatch[2] || '').toLowerCase() === 'x', content: checkMatch[3] };
-          return { type: 'text', content: line };
-        }
-
-        function toggleCheckboxLine(lineIdx, checked) {
-          const lines = item.text.split('\n');
-          const line = lines[lineIdx];
-          const match = line.match(/^(\s*)\[( |x|X)?\](\s+.*)$/);
-          if (match) {
-            lines[lineIdx] = match[1] + '[' + (checked ? 'x' : ' ') + ']' + match[3];
-            item.text = lines.join('\n');
-          }
-        }
-
-        // Appends parsed content for `subset` (a slice of the card's full
-        // line array) into `container`. `offset` is subset's starting index
-        // within the *full* array, so checkbox toggling still writes back to
-        // the right line no matter which container (title vs description) a
-        // checkbox line ends up rendered into.
-        function renderLines(container, subset, offset) {
-          let currentList = null;
-          subset.forEach((rawLine, i) => {
-            const idx = offset + i;
-            if (rawLine.trim() === '') {
-              currentList = null;
-              const spacer = document.createElement('div');
-              spacer.className = 'card-line-text';
-              spacer.innerHTML = '&nbsp;';
-              container.appendChild(spacer);
-              return;
-            }
-            const parsed = parseLine(rawLine);
-            if (parsed.type === 'bullet') {
-              if (!currentList) {
-                currentList = document.createElement('ul');
-                currentList.className = 'card-bullet-list';
-                container.appendChild(currentList);
-              }
-              const li = document.createElement('li');
-              li.textContent = parsed.content;
-              currentList.appendChild(li);
-            } else if (parsed.type === 'checkbox') {
-              currentList = null;
-              const row = document.createElement('label');
-              row.className = 'checklist-row' + (parsed.checked ? ' checked' : '');
-              row.addEventListener('mousedown', (e) => e.stopPropagation());
-              row.addEventListener('click', (e) => e.stopPropagation());
-              const cb = document.createElement('input');
-              cb.type = 'checkbox';
-              cb.checked = parsed.checked;
-              cb.addEventListener('change', () => {
-                pushHistory();
-                toggleCheckboxLine(idx, cb.checked);
-                save(state);
-                row.classList.toggle('checked', cb.checked);
-              });
-              const span = document.createElement('span');
-              span.textContent = parsed.content;
-              row.appendChild(cb);
-              row.appendChild(span);
-              container.appendChild(row);
-            } else {
-              currentList = null;
-              const p = document.createElement('div');
-              p.className = 'card-line-text';
-              p.textContent = parsed.content;
-              container.appendChild(p);
-            }
-          });
-        }
-
-        // Line 1 is the card's title -- always shown, parsed the same as any
-        // other line (so a single-line checkbox/bullet "title" -- the common
-        // shape for a quick-captured task -- stays a fully interactive
-        // checkbox/bullet, not plain text). Lines 2+ are its description,
-        // hidden by default behind a "Show details" toggle so a lengthy task
-        // doesn't dominate the column; expandedCards (ephemeral, keyed by
-        // item id) tracks which cards currently have it open.
-        function renderView() {
-          listView.innerHTML = '';
-          const existingDesc = card.querySelector('.card-description-view');
-          if (existingDesc) existingDesc.remove();
-          const existingToggle = card.querySelector('.card-details-toggle');
-          if (existingToggle) existingToggle.remove();
-
-          const lines = item.text.split('\n');
-          const descLines = lines.slice(1);
-          const hasDescription = descLines.some(l => l.trim() !== '');
-
-          renderLines(listView, lines.slice(0, 1), 0);
-
-          if (hasDescription) {
-            const isExpanded = expandedCards.has(item.id);
-
-            const toggleBtn = document.createElement('button');
-            toggleBtn.className = 'card-details-toggle';
-            toggleBtn.textContent = isExpanded ? 'Hide details' : 'Show details';
-            toggleBtn.addEventListener('mousedown', (e) => e.stopPropagation());
-            toggleBtn.addEventListener('click', (e) => {
-              e.stopPropagation();
-              if (isExpanded) expandedCards.delete(item.id); else expandedCards.add(item.id);
-              renderView();
-            });
-            listView.insertAdjacentElement('afterend', toggleBtn);
-
-            if (isExpanded) {
-              const descView = document.createElement('div');
-              descView.className = 'card-list-view card-description-view';
-              toggleBtn.insertAdjacentElement('afterend', descView);
-              renderLines(descView, descLines, 1);
-            }
-          }
-        }
-
-        renderView();
-
-        const copyBtn = document.createElement('button');
-        copyBtn.className = 'card-copy-btn';
-        copyBtn.type = 'button';
-        copyBtn.title = 'Copy task text';
-        copyBtn.innerHTML = COPY_ICON_SVG;
-        copyBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          copyTaskText(item.text, copyBtn);
-        });
-        copyBtn.addEventListener('mousedown', (e) => e.stopPropagation());
-        card.appendChild(copyBtn);
-
-        const menuWrap = document.createElement('div');
-        menuWrap.className = 'card-menu';
-
-        const menuBtn = document.createElement('button');
-        menuBtn.className = 'card-menu-btn';
-        menuBtn.textContent = '\u22EE';
-        menuBtn.title = 'Task options';
-        menuWrap.appendChild(menuBtn);
-
-        const dropdown = document.createElement('div');
-        dropdown.className = 'card-menu-dropdown';
-
-        const editItem = document.createElement('button');
-        editItem.className = 'card-menu-item';
-        editItem.textContent = 'Edit task';
-        editItem.addEventListener('click', (e) => {
-          e.stopPropagation();
-          menuWrap.classList.remove('open');
-          card.classList.remove('menu-open');
-          openEditTaskModal(item);
-        });
-        dropdown.appendChild(editItem);
-
-        const createdDivider = document.createElement('div');
-        createdDivider.className = 'card-menu-divider';
-        dropdown.appendChild(createdDivider);
-
-        const createdRow = document.createElement('div');
-        createdRow.className = 'card-menu-deadline-row';
-        const createdLabel = document.createElement('span');
-        createdLabel.className = 'card-menu-label';
-        createdLabel.textContent = 'Created on';
-        createdRow.appendChild(createdLabel);
-        const createdInput = document.createElement('input');
-        createdInput.type = 'date';
-        createdInput.className = 'card-menu-date-input';
-        createdInput.value = dateStrFromTimestamp(item.created);
-        createdInput.addEventListener('click', (e) => e.stopPropagation());
-        createdInput.addEventListener('mousedown', (e) => e.stopPropagation());
-        createdRow.appendChild(createdInput);
-        dropdown.appendChild(createdRow);
-
-        const deadlineDivider = document.createElement('div');
-        deadlineDivider.className = 'card-menu-divider';
-        dropdown.appendChild(deadlineDivider);
-
-        const deadlineRow = document.createElement('div');
-        deadlineRow.className = 'card-menu-deadline-row';
-        const deadlineLabel = document.createElement('span');
-        deadlineLabel.className = 'card-menu-label';
-        deadlineLabel.textContent = 'Deadline';
-        deadlineRow.appendChild(deadlineLabel);
-        const deadlineInput = document.createElement('input');
-        deadlineInput.type = 'date';
-        deadlineInput.className = 'card-menu-date-input';
-        if (item.deadline) deadlineInput.value = item.deadline;
-        deadlineInput.addEventListener('click', (e) => e.stopPropagation());
-        deadlineInput.addEventListener('mousedown', (e) => e.stopPropagation());
-        deadlineRow.appendChild(deadlineInput);
-        dropdown.appendChild(deadlineRow);
-
-        const clearDeadlineBtn = document.createElement('button');
-        clearDeadlineBtn.className = 'card-menu-item';
-        clearDeadlineBtn.textContent = 'Clear deadline';
-        clearDeadlineBtn.style.display = item.deadline ? '' : 'none';
-        clearDeadlineBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          pushHistory();
-          item.deadline = null;
-          deadlineInput.value = '';
-          refreshDeadlineUI();
-          save(state);
-        });
-        dropdown.appendChild(clearDeadlineBtn);
-
-        const pointsDivider = document.createElement('div');
-        pointsDivider.className = 'card-menu-divider';
-        dropdown.appendChild(pointsDivider);
-
-        const pointsRow = document.createElement('div');
-        pointsRow.className = 'card-menu-deadline-row';
-        const pointsLabel = document.createElement('span');
-        pointsLabel.className = 'card-menu-label';
-        pointsLabel.textContent = 'Points';
-        pointsRow.appendChild(pointsLabel);
-        const pointsInput = document.createElement('input');
-        pointsInput.type = 'number';
-        pointsInput.min = '0';
-        pointsInput.className = 'card-menu-date-input';
-        if (item.points != null) pointsInput.value = item.points;
-        pointsInput.addEventListener('click', (e) => e.stopPropagation());
-        pointsInput.addEventListener('mousedown', (e) => e.stopPropagation());
-        pointsRow.appendChild(pointsInput);
-        dropdown.appendChild(pointsRow);
-
-        const clearPointsBtn = document.createElement('button');
-        clearPointsBtn.className = 'card-menu-item';
-        clearPointsBtn.textContent = 'Clear points';
-        clearPointsBtn.style.display = item.points != null ? '' : 'none';
-        clearPointsBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          pushHistory();
-          item.points = null;
-          pointsInput.value = '';
-          refreshPointsUI();
-          save(state);
-          refreshBurndown();
-        });
-        dropdown.appendChild(clearPointsBtn);
-
-        // Only meaningful for a task currently sitting in a Done column --
-        // Kanban's own, or a sprint's -- lets the user see/backdate when it
-        // actually finished. completedAt itself is kept in sync
-        // automatically elsewhere (dragging in/out of Done, sendToOtherPool,
-        // moveItemToProject); this field only ever edits the date, never
-        // clears it, since "in Done with no completion date" would break
-        // the invariant (relied on by the Scrum burndown formula, and now
-        // also by the completion-date footer badge below) that completedAt
-        // is set iff the item is in a Done column.
-        const isDone = isDoneContainer(proj, container, col);
-
-        const completedDivider = document.createElement('div');
-        completedDivider.className = 'card-menu-divider';
-        completedDivider.style.display = isDone ? '' : 'none';
-        dropdown.appendChild(completedDivider);
-
-        const completedRow = document.createElement('div');
-        completedRow.className = 'card-menu-deadline-row';
-        completedRow.style.display = isDone ? '' : 'none';
-        const completedLabel = document.createElement('span');
-        completedLabel.className = 'card-menu-label';
-        completedLabel.textContent = 'Completed on';
-        completedRow.appendChild(completedLabel);
-        const completedInput = document.createElement('input');
-        completedInput.type = 'date';
-        completedInput.className = 'card-menu-date-input';
-        if (item.completedAt) completedInput.value = item.completedAt;
-        completedInput.addEventListener('click', (e) => e.stopPropagation());
-        completedInput.addEventListener('mousedown', (e) => e.stopPropagation());
-        completedRow.appendChild(completedInput);
-        dropdown.appendChild(completedRow);
-
-        let completedHistoryPushed = false;
-        completedInput.addEventListener('focus', () => {
-          completedHistoryPushed = false;
-        });
-        completedInput.addEventListener('change', (e) => {
-          if (!completedHistoryPushed) {
-            pushHistory();
-            completedHistoryPushed = true;
-          }
-          item.completedAt = e.target.value || todayDateStr();
-          refreshCompletedUI();
-          save(state);
-          refreshBurndown();
-        });
-
-        const sendDivider = document.createElement('div');
-        sendDivider.className = 'card-menu-divider';
-        dropdown.appendChild(sendDivider);
-
-        const inKanbanPool = col !== 'backlog' && resolveContainer(proj, col) === proj;
-        const sendBtn = document.createElement('button');
-        sendBtn.className = 'card-menu-item';
-        sendBtn.textContent = inKanbanPool ? 'Send to Scrum' : 'Send to Kanban';
-        sendBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          sendToOtherPool(item.id);
-        });
-        dropdown.appendChild(sendBtn);
-
-        if (state.projects.length > 1) {
-          const divider1 = document.createElement('div');
-          divider1.className = 'card-menu-divider';
-          dropdown.appendChild(divider1);
-
-          const moveLabel = document.createElement('div');
-          moveLabel.className = 'card-menu-section-label';
-          moveLabel.textContent = 'Move to';
-          dropdown.appendChild(moveLabel);
-
-          state.projects.forEach(p => {
-            if (p.id === state.activeProjectId) return;
-            const moveBtn = document.createElement('button');
-            moveBtn.className = 'card-menu-item';
-            moveBtn.textContent = p.name;
-            moveBtn.addEventListener('click', (e) => {
-              e.stopPropagation();
-              moveItemToProject(item.id, p.id);
-              render();
-            });
-            dropdown.appendChild(moveBtn);
-          });
-        }
-
-        const divider2 = document.createElement('div');
-        divider2.className = 'card-menu-divider';
-        dropdown.appendChild(divider2);
-
-        const deleteItem = document.createElement('button');
-        deleteItem.className = 'card-menu-item card-menu-delete';
-        deleteItem.textContent = 'Delete task';
-        deleteItem.addEventListener('click', (e) => {
-          e.stopPropagation();
-          removeItem(item.id);
-          render();
-        });
-        dropdown.appendChild(deleteItem);
-
-        // Appended to <body>, not menuWrap -- see the .card-menu-dropdown
-        // comment in workhorse.css for why it can't stay nested under the
-        // card and still use position: fixed reliably. Stashing menuBtn
-        // directly on the node (a plain JS property, not an HTML attribute)
-        // is how repositionOpenCardMenu finds the right anchor on scroll/
-        // resize, since dropdown and menuBtn are no longer DOM relatives.
-        dropdown._menuBtn = menuBtn;
-        document.body.appendChild(dropdown);
-
-        menuBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const isOpen = dropdown.classList.contains('open');
-          closeAllCardMenus();
-          if (!isOpen) {
-            menuWrap.classList.add('open');
-            card.classList.add('menu-open');
-            dropdown.classList.add('open');
-            positionCardMenuDropdown(menuBtn, dropdown);
-          }
-        });
-        menuBtn.addEventListener('mousedown', (e) => e.stopPropagation());
-
-        card.appendChild(menuWrap);
-
-        const footerRow = document.createElement('div');
-        footerRow.className = 'card-footer';
-
-        const dateWrap = document.createElement('div');
-        dateWrap.className = 'card-dates';
-
-        const date = document.createElement('span');
-        date.className = 'card-date';
-        date.textContent = formatDate(item.created);
-        dateWrap.appendChild(date);
-
-        const deadlineBadge = document.createElement('span');
-        deadlineBadge.className = 'card-deadline';
-        deadlineBadge.style.display = 'none';
-        dateWrap.appendChild(deadlineBadge);
-
-        const pointsBadge = document.createElement('span');
-        pointsBadge.className = 'card-points';
-        pointsBadge.style.display = 'none';
-        dateWrap.appendChild(pointsBadge);
-
-        // A sibling of dateWrap (not a child of it) so .card-footer's
-        // existing justify-content: space-between pushes it to the opposite
-        // corner from creation date/deadline/points, instead of just
-        // trailing after them in the same left-aligned group.
-        const completedBadge = document.createElement('span');
-        completedBadge.className = 'card-completed';
-        completedBadge.style.display = 'none';
-
-        function refreshCompletedUI() {
-          if (item.completedAt) {
-            completedBadge.style.display = '';
-            completedBadge.textContent = 'done ' + formatDeadline(item.completedAt);
-          } else {
-            completedBadge.style.display = 'none';
-          }
-        }
-        refreshCompletedUI();
-
-        function refreshDeadlineUI() {
-          if (item.deadline) {
-            deadlineBadge.style.display = '';
-            deadlineBadge.className = 'card-deadline' + (isOverdue(item.deadline, col) ? ' overdue' : '');
-            deadlineBadge.textContent = 'due ' + formatDeadline(item.deadline);
-            clearDeadlineBtn.style.display = '';
-          } else {
-            deadlineBadge.style.display = 'none';
-            clearDeadlineBtn.style.display = 'none';
-          }
-        }
-        refreshDeadlineUI();
-
-        function refreshPointsUI() {
-          if (item.points != null) {
-            pointsBadge.style.display = '';
-            pointsBadge.textContent = item.points + ' pt' + (item.points === 1 ? '' : 's');
-            clearPointsBtn.style.display = '';
-          } else {
-            pointsBadge.style.display = 'none';
-            clearPointsBtn.style.display = 'none';
-          }
-        }
-        refreshPointsUI();
-
-        let createdHistoryPushed = false;
-        createdInput.addEventListener('focus', () => {
-          createdHistoryPushed = false;
-        });
-        createdInput.addEventListener('change', (e) => {
-          const val = e.target.value;
-          if (!val) { createdInput.value = dateStrFromTimestamp(item.created); return; } // never allow clearing -- every item has a creation date
-          if (!createdHistoryPushed) {
-            pushHistory();
-            createdHistoryPushed = true;
-          }
-          // item.created is a timestamp, but only ever read back out through
-          // formatDate()/dateStrFromTimestamp(), both local-time -- build the
-          // new timestamp from local date parts too (not `new Date(val)`,
-          // which parses a bare 'YYYY-MM-DD' as UTC midnight and would
-          // silently shift a day in negative-UTC timezones).
-          const [y, m, d] = val.split('-').map(Number);
-          item.created = new Date(y, m - 1, d).getTime();
-          date.textContent = formatDate(item.created);
-          save(state);
-        });
-
-        let deadlineHistoryPushed = false;
-        deadlineInput.addEventListener('focus', () => {
-          deadlineHistoryPushed = false;
-        });
-        deadlineInput.addEventListener('change', (e) => {
-          if (!deadlineHistoryPushed) {
-            pushHistory();
-            deadlineHistoryPushed = true;
-          }
-          item.deadline = e.target.value || null;
-          refreshDeadlineUI();
-          save(state);
-        });
-
-        let pointsHistoryPushed = false;
-        pointsInput.addEventListener('focus', () => {
-          pointsHistoryPushed = false;
-        });
-        pointsInput.addEventListener('change', (e) => {
-          if (!pointsHistoryPushed) {
-            pushHistory();
-            pointsHistoryPushed = true;
-          }
-          const val = e.target.value;
-          item.points = val === '' ? null : Math.max(0, Math.round(Number(val)));
-          refreshPointsUI();
-          save(state);
-          refreshBurndown();
-        });
-
-        footerRow.appendChild(dateWrap);
-        footerRow.appendChild(completedBadge);
-        card.appendChild(footerRow);
-
-        card.addEventListener('dragstart', (e) => {
-          card.classList.add('dragging');
-          e.dataTransfer.setData('text/plain', item.id);
-          e.dataTransfer.effectAllowed = 'move';
-        });
-        card.addEventListener('dragend', () => {
-          card.classList.remove('dragging');
-        });
-
-        card.addEventListener('touchstart', (e) => {
-          if (e.target.closest('.card-menu, .checklist-row, .card-details-toggle, .card-copy-btn')) return;
-          const touch = e.touches[0];
-          touchDrag = {
-            itemId: item.id,
-            originCard: card,
-            startX: touch.clientX,
-            startY: touch.clientY,
-            armed: false,
-            ghost: null,
-            ghostOffsetX: 0,
-            ghostOffsetY: 0,
-            currentDropEl: null,
-            scrollSpeed: 0,
-            rafId: null,
-            longPressTimer: null
-          };
-          touchDrag.longPressTimer = setTimeout(armTouchDrag, TOUCH_LONG_PRESS_MS);
-        }, { passive: true });
-
-        card.addEventListener('touchmove', (e) => {
-          if (!touchDrag || touchDrag.originCard !== card) return;
-          const touch = e.touches[0];
-          if (!touchDrag.armed) {
-            const dx = touch.clientX - touchDrag.startX;
-            const dy = touch.clientY - touchDrag.startY;
-            if (Math.hypot(dx, dy) > TOUCH_MOVE_CANCEL_PX) {
-              cleanupTouchDrag();
-            }
-            return;
-          }
-          e.preventDefault();
-          updateTouchDragPosition(touch.clientX, touch.clientY);
-        }, { passive: false });
-
-        card.addEventListener('touchend', () => {
-          if (!touchDrag || touchDrag.originCard !== card) return;
-          if (touchDrag.armed) {
-            finishTouchDrag();
-          } else {
-            cleanupTouchDrag();
-          }
-        }, { passive: true });
-
-        card.addEventListener('touchcancel', () => {
-          if (!touchDrag || touchDrag.originCard !== card) return;
-          cleanupTouchDrag();
-        }, { passive: true });
-
-        zone.appendChild(card);
+        zone.appendChild(buildCard(item, col, container, proj));
       });
 
       if (stackActive) {
