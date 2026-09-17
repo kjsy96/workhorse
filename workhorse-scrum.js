@@ -276,12 +276,12 @@
   // click, this just explains the conflict and leaves both sprints alone
   // until the user resolves it themselves (mirrors how "Start Sprint"
   // itself is already unavailable while a sprint is active).
-  function reopenSprint(proj, sprint) {
+  async function reopenSprint(proj, sprint) {
     if (proj.activeSprint) {
-      alert('Finish or delete your current sprint, "' + proj.activeSprint.name + '," before reopening this one.');
+      showAppAlert('Finish or delete your current sprint, "' + proj.activeSprint.name + '," before reopening this one.');
       return;
     }
-    const confirmed = confirm('Reopen "' + sprint.name + '"? It will become your active sprint again. You can undo this with Ctrl+Z.');
+    const confirmed = await showAppConfirm('Reopen "' + sprint.name + '"? It will become your active sprint again. You can undo this with Ctrl+Z.', { confirmLabel: 'Reopen' });
     if (!confirmed) return;
     pushHistory();
     const idx = proj.sprints.findIndex(s => s.id === sprint.id);
@@ -300,12 +300,12 @@
   // (recoverable, just not credited to any sprint anymore) or being deleted
   // along with it -- asked up front via which button was clicked, rather
   // than a single confirm() that can't express a 3-way choice.
-  function deleteArchivedSprint(proj, sprint, returnTasksToBacklog) {
+  async function deleteArchivedSprint(proj, sprint, returnTasksToBacklog) {
     const count = sprint.done.length;
     const taskWord = count === 1 ? 'task' : 'tasks';
     const confirmed = returnTasksToBacklog
-      ? confirm('Delete "' + sprint.name + '" from history? Its ' + count + ' completed ' + taskWord + ' will be moved to the Backlog. You can undo this with Ctrl+Z.')
-      : confirm('Delete "' + sprint.name + '" and its ' + count + ' completed ' + taskWord + '? They will NOT be moved to the Backlog. You can undo this with Ctrl+Z.');
+      ? await showAppConfirm('Delete "' + sprint.name + '" from history? Its ' + count + ' completed ' + taskWord + ' will be moved to the Backlog. You can undo this with Ctrl+Z.', { danger: true, confirmLabel: 'Delete' })
+      : await showAppConfirm('Delete "' + sprint.name + '" and its ' + count + ' completed ' + taskWord + '? They will NOT be moved to the Backlog. You can undo this with Ctrl+Z.', { danger: true, confirmLabel: 'Delete' });
     if (!confirmed) return;
     pushHistory();
     const idx = proj.sprints.findIndex(s => s.id === sprint.id);
@@ -357,11 +357,12 @@
     render();
   }
 
-  function completeSprint(proj) {
+  async function completeSprint(proj) {
     if (!proj.activeSprint) return;
-    const confirmed = confirm(
+    const confirmed = await showAppConfirm(
       'Complete "' + proj.activeSprint.name + '"? Unfinished tasks (To do/In progress/Review) will ' +
-      'return to the Backlog. You can undo this with Ctrl+Z.'
+      'return to the Backlog. You can undo this with Ctrl+Z.',
+      { confirmLabel: 'Complete' }
     );
     if (!confirmed) return;
     pushHistory();
@@ -381,11 +382,12 @@
   // *everything* currently in the sprint -- including tasks already in
   // Done -- returns to the Backlog, since deleting means the sprint itself
   // was a mistake, not that its finished work should be credited anywhere.
-  function deleteSprint(proj) {
+  async function deleteSprint(proj) {
     if (!proj.activeSprint) return;
-    const confirmed = confirm(
+    const confirmed = await showAppConfirm(
       'Delete "' + proj.activeSprint.name + '"? All its tasks, including any already marked Done, will ' +
-      'return to the Backlog, and the sprint won’t be kept in history. You can undo this with Ctrl+Z.'
+      'return to the Backlog, and the sprint won’t be kept in history. You can undo this with Ctrl+Z.',
+      { danger: true, confirmLabel: 'Delete' }
     );
     if (!confirmed) return;
     pushHistory();
@@ -474,14 +476,14 @@
     document.getElementById('sprint-modal-backdrop').style.display = 'none';
   }
 
-  function submitStartSprint(proj) {
+  async function submitStartSprint(proj) {
     const name = document.getElementById('sprint-name-input').value.trim();
     const goal = document.getElementById('sprint-goal-input').value.trim();
     const startDate = document.getElementById('sprint-start-input').value;
     const endDate = document.getElementById('sprint-end-input').value;
-    if (!name) { alert('Give the sprint a name.'); return; }
-    if (!startDate || !endDate) { alert('Pick a start and end date.'); return; }
-    if (endDate < startDate) { alert('End date must be on or after the start date.'); return; }
+    if (!name) { showAppAlert('Give the sprint a name.'); return; }
+    if (!startDate || !endDate) { showAppAlert('Pick a start and end date.'); return; }
+    if (endDate < startDate) { showAppAlert('End date must be on or after the start date.'); return; }
 
     // A sprint spanning this long is almost always a date-entry typo (e.g. a
     // wrong year), not an intentional sprint length -- warn rather than
@@ -490,9 +492,10 @@
     const spanDays = dateToDayNum(endDate) - dateToDayNum(startDate);
     const SPRINT_LENGTH_WARN_DAYS = 90;
     if (spanDays > SPRINT_LENGTH_WARN_DAYS) {
-      const proceed = confirm(
+      const proceed = await showAppConfirm(
         'This sprint spans ' + spanDays + ' days (' + formatSprintDate(startDate) + '–' + formatSprintDate(endDate) + '). ' +
-        'Most sprints run 1–4 weeks — double check the dates before continuing.\n\nContinue anyway?'
+        'Most sprints run 1–4 weeks — double check the dates before continuing.\n\nContinue anyway?',
+        { confirmLabel: 'Continue' }
       );
       if (!proceed) return;
     }

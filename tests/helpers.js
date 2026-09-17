@@ -26,4 +26,25 @@ async function openCardMenu(page, card) {
   return dropdown;
 }
 
-module.exports = { APP_URL, addTask, openCardMenu };
+// Themed replacements for window.alert()/window.confirm() (issue #63) --
+// these drive the shared #app-alert-modal-backdrop/#app-confirm-modal-backdrop
+// instead of Playwright's page.on('dialog', ...) native-dialog API.
+async function acceptAppConfirm(page) {
+  await expect(page.locator('#app-confirm-modal-backdrop')).toBeVisible();
+  await page.locator('#app-confirm-modal-ok').click();
+  await expect(page.locator('#app-confirm-modal-backdrop')).toBeHidden();
+}
+
+async function dismissAppConfirm(page) {
+  await expect(page.locator('#app-confirm-modal-backdrop')).toBeVisible();
+  await page.locator('#app-confirm-modal-cancel').click();
+  await expect(page.locator('#app-confirm-modal-backdrop')).toBeHidden();
+}
+
+async function dismissAppAlert(page) {
+  await expect(page.locator('#app-alert-modal-backdrop')).toBeVisible();
+  await page.locator('#app-alert-modal-ok').click();
+  await expect(page.locator('#app-alert-modal-backdrop')).toBeHidden();
+}
+
+module.exports = { APP_URL, addTask, openCardMenu, acceptAppConfirm, dismissAppConfirm, dismissAppAlert };

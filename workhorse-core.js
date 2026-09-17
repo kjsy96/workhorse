@@ -1,4 +1,4 @@
-  const APP_VERSION = 'v1.7';
+  const APP_VERSION = 'v1.8';
   const STORAGE_KEY = 'kanban-personal-board-v1';
   const THEME_STORAGE_KEY = 'kanban-theme-v1';
   const COLS = ['backlog', 'todo', 'doing', 'review', 'done'];
@@ -251,6 +251,86 @@
     applyTheme(currentTheme === 'dark' ? 'light' : 'dark');
   }
 
+  // Themed replacements for window.alert()/window.confirm() (issue #63) --
+  // both promise-based so a confirm()'s result can still gate logic via
+  // await, while a validation-style alert() that only guards an early
+  // return doesn't need to be awaited at all. Each drives one of the two
+  // dedicated backdrops in workhorse.html, matching the existing sprint/
+  // task modal markup pattern rather than inventing a new one.
+  function showAppAlert(message, opts) {
+    opts = opts || {};
+    return new Promise((resolve) => {
+      const backdrop = document.getElementById('app-alert-modal-backdrop');
+      const okBtn = document.getElementById('app-alert-modal-ok');
+      document.getElementById('app-alert-modal-title').textContent = opts.title || 'Notice';
+      document.getElementById('app-alert-modal-text').textContent = message;
+      backdrop.style.display = 'flex';
+      okBtn.focus();
+
+      function cleanup() {
+        backdrop.style.display = 'none';
+        okBtn.removeEventListener('click', onOk);
+        backdrop.removeEventListener('click', onBackdropClick);
+        document.removeEventListener('keydown', onKeydown, true);
+        resolve();
+      }
+      function onOk() { cleanup(); }
+      function onBackdropClick(e) { if (e.target === backdrop) cleanup(); }
+      // Capture phase + stopPropagation, so this modal's Escape/Enter always
+      // wins over any other document-level keydown handler underneath it
+      // (e.g. a sprint modal that's still open behind this one) regardless
+      // of which was registered first -- otherwise both handlers would fire
+      // on the same keypress and the modal underneath would close too.
+      function onKeydown(e) {
+        if (e.key === 'Escape' || e.key === 'Enter') {
+          e.preventDefault();
+          e.stopPropagation();
+          cleanup();
+        }
+      }
+      okBtn.addEventListener('click', onOk);
+      backdrop.addEventListener('click', onBackdropClick);
+      document.addEventListener('keydown', onKeydown, true);
+    });
+  }
+
+  function showAppConfirm(message, opts) {
+    opts = opts || {};
+    return new Promise((resolve) => {
+      const backdrop = document.getElementById('app-confirm-modal-backdrop');
+      const okBtn = document.getElementById('app-confirm-modal-ok');
+      const cancelBtn = document.getElementById('app-confirm-modal-cancel');
+      document.getElementById('app-confirm-modal-title').textContent = opts.title || 'Please confirm';
+      document.getElementById('app-confirm-modal-text').textContent = message;
+      okBtn.textContent = opts.confirmLabel || 'OK';
+      cancelBtn.textContent = opts.cancelLabel || 'Cancel';
+      okBtn.classList.toggle('danger-btn', !!opts.danger);
+      backdrop.style.display = 'flex';
+      cancelBtn.focus();
+
+      function cleanup(result) {
+        backdrop.style.display = 'none';
+        okBtn.removeEventListener('click', onOk);
+        cancelBtn.removeEventListener('click', onCancel);
+        backdrop.removeEventListener('click', onBackdropClick);
+        document.removeEventListener('keydown', onKeydown, true);
+        resolve(result);
+      }
+      function onOk() { cleanup(true); }
+      function onCancel() { cleanup(false); }
+      function onBackdropClick(e) { if (e.target === backdrop) cleanup(false); }
+      // See showAppAlert's onKeydown above for why this is capture-phase + stopPropagation.
+      function onKeydown(e) {
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); cleanup(false); }
+        else if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); cleanup(true); }
+      }
+      okBtn.addEventListener('click', onOk);
+      cancelBtn.addEventListener('click', onCancel);
+      backdrop.addEventListener('click', onBackdropClick);
+      document.addEventListener('keydown', onKeydown, true);
+    });
+  }
+
   function updateSaveFileStatus() {
     const wrap = document.getElementById('save-status');
     const textEl = document.getElementById('save-status-text');
@@ -366,7 +446,7 @@
         perm = await handle.requestPermission({ mode: 'readwrite' });
       }
       if (perm !== 'granted') {
-        alert('Read-write access is needed so this file can keep autosaving. Please try again and allow access when prompted.');
+        showAppAlert('Read-write access is needed so this file can keep autosaving. Please try again and allow access when prompted.');
         return;
       }
 
@@ -378,7 +458,7 @@
       if (ok) {
         await storeHandle(handle);
       } else {
-        alert('That file doesn\u2019t look like a Workhorse save file, or its contents couldn\u2019t be read. Nothing was changed \u2014 your board and that file are both untouched.');
+        showAppAlert('That file doesn\u2019t look like a Workhorse save file, or its contents couldn\u2019t be read. Nothing was changed \u2014 your board and that file are both untouched.');
       }
       updateSaveFileStatus();
     } catch (e) {
@@ -400,7 +480,7 @@
         const existingFile = await handle.getFile();
         const existingText = await existingFile.text();
         if (existingText && existingText.trim()) {
-          const proceed = confirm('That file already has content. Starting a new save file here will overwrite it with your current board. Continue?');
+          const proceed = await showAppConfirm('That file already has content. Starting a new save file here will overwrite it with your current board. Continue?', { danger: true, confirmLabel: 'Overwrite' });
           if (!proceed) return;
         }
       } catch (e) { /* new/unreadable file - fine to proceed */ }
@@ -427,7 +507,7 @@
         pendingHandle = null;
         const ok = await loadFromFileHandle();
         if (!ok) {
-          alert('That save file doesn\u2019t look valid anymore. Use "Load existing file" to pick a different one.');
+          showAppAlert('That save file doesn\u2019t look valid anymore. Use "Load existing file" to pick a different one.');
         }
         updateSaveFileStatus();
       }

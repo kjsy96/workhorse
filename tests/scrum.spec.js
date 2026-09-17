@@ -1,6 +1,6 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
-const { APP_URL, addTask, openCardMenu } = require('./helpers');
+const { APP_URL, addTask, openCardMenu, acceptAppConfirm, dismissAppConfirm, dismissAppAlert } = require('./helpers');
 
 test('starting and completing a sprint moves items and records history', async ({ page }) => {
   const errors = [];
@@ -13,7 +13,6 @@ test('starting and completing a sprint moves items and records history', async (
     if (backdrop) backdrop.style.display = 'none';
   });
 
-  page.on('dialog', (d) => d.accept());
   await page.locator('.view-toggle-option', { hasText: 'Scrum' }).click();
 
   await addTask(page, 'backlog', 'Sprint task one');
@@ -41,6 +40,7 @@ test('starting and completing a sprint moves items and records history', async (
   await expect(page.locator('[data-count="review"]')).toHaveText('1');
 
   await page.locator('#project-toolbar button', { hasText: 'Complete Sprint' }).click();
+  await acceptAppConfirm(page);
 
   await expect(page.locator('#project-toolbar button', { hasText: 'Start Sprint' })).toBeVisible();
   await expect(page.locator('[data-count="review"]')).toHaveText('0');
@@ -113,7 +113,6 @@ test('burndown chart derives from completion dates: leaving Done un-completes an
     if (backdrop) backdrop.style.display = 'none';
   });
 
-  page.on('dialog', (d) => d.accept());
   await page.locator('.view-toggle-option', { hasText: 'Scrum' }).click();
 
   await addTask(page, 'backlog', 'Three point task');
@@ -211,6 +210,7 @@ test('burndown chart derives from completion dates: leaving Done un-completes an
 
   // complete the sprint, start a fresh empty one -- must not throw on 0 total
   await page.locator('#project-toolbar button', { hasText: 'Complete Sprint' }).click();
+  await acceptAppConfirm(page);
   await page.locator('#project-toolbar button', { hasText: 'Start Sprint' }).click();
   await page.locator('#sprint-name-input').fill('Empty Sprint');
   await page.locator('#sprint-start-input').fill('2026-02-01');
@@ -406,7 +406,6 @@ test('sprint can be edited, deleted (returning even Done tasks to Backlog), and 
     const backdrop = document.getElementById('save-warning-backdrop');
     if (backdrop) backdrop.style.display = 'none';
   });
-  page.on('dialog', (d) => d.accept());
   await page.locator('.view-toggle-option', { hasText: 'Scrum' }).click();
 
   async function startSprint(name, startDate, endDate, includeTaskTexts) {
@@ -438,6 +437,7 @@ test('sprint can be edited, deleted (returning even Done tasks to Backlog), and 
   await expect(page.locator('[data-count="done"]')).toHaveText('1');
 
   await page.locator('#project-toolbar button', { hasText: 'Delete Sprint' }).click();
+  await acceptAppConfirm(page);
   await expect(page.locator('#project-toolbar button', { hasText: 'Start Sprint' })).toBeVisible();
   await expect(page.locator('[data-count="backlog"]')).toHaveText('1'); // the Done task came back too
   await expect(page.locator('#project-toolbar button', { hasText: 'past sprint' })).toHaveCount(0); // deleted, not archived
@@ -455,10 +455,12 @@ test('sprint can be edited, deleted (returning even Done tasks to Backlog), and 
 
   // --- History detail: complete a fresh sprint and view what finished ---
   await page.locator('#project-toolbar button', { hasText: 'Complete Sprint' }).click();
+  await acceptAppConfirm(page);
   await startSprint('Sprint B', '2026-09-01', '2026-09-14');
   await addTask(page, 'backlog', 'Second sprint task');
   await page.locator('#dropzone-backlog .card', { hasText: 'Second sprint task' }).dragTo(page.locator('#dropzone-done'));
   await page.locator('#project-toolbar button', { hasText: 'Complete Sprint' }).click();
+  await acceptAppConfirm(page);
 
   await page.locator('#project-toolbar button', { hasText: 'past sprint' }).click();
   await expect(page.locator('.sprint-history-row')).toHaveCount(2);
@@ -524,13 +526,11 @@ test('past sprints can be reopened (blocked when one is already active) or delet
     if (backdrop) backdrop.style.display = 'none';
   });
 
-  let lastDialogMessage = '';
-  page.on('dialog', (d) => { lastDialogMessage = d.message(); d.accept(); });
-
   // --- Reopen Sprint A: succeeds since nothing is currently active ---
   await page.locator('#project-toolbar button', { hasText: 'past sprint' }).click();
   await page.locator('.sprint-history-row', { hasText: 'Sprint A' }).click();
   await page.locator('#sprint-detail-modal-actions button', { hasText: 'Reopen Sprint' }).click();
+  await acceptAppConfirm(page);
 
   await expect(page.locator('#sprint-detail-modal-backdrop')).toBeHidden();
   await expect(page.locator('#sprint-history-modal-backdrop')).toBeHidden();
@@ -553,7 +553,8 @@ test('past sprints can be reopened (blocked when one is already active) or delet
   await page.locator('#project-toolbar button', { hasText: 'past sprint' }).click();
   await page.locator('.sprint-history-row', { hasText: 'Sprint B' }).click();
   await page.locator('#sprint-detail-modal-actions button', { hasText: 'Reopen Sprint' }).click();
-  expect(lastDialogMessage).toContain('Sprint A'); // explains *why*, naming the blocker
+  await expect(page.locator('#app-alert-modal-text')).toContainText('Sprint A'); // explains *why*, naming the blocker
+  await dismissAppAlert(page);
 
   const stillBlocked = await page.evaluate(() => {
     const p = activeProject();
@@ -572,6 +573,7 @@ test('past sprints can be reopened (blocked when one is already active) or delet
 
   await page.locator('.sprint-detail-delete-menu > button').click();
   await page.locator('.sprint-detail-delete-dropdown button', { hasText: 'Delete (Keep Tasks)' }).click();
+  await acceptAppConfirm(page);
   await expect(page.locator('#sprint-detail-modal-backdrop')).toBeHidden();
   await expect(page.locator('#sprint-history-modal-backdrop')).toBeVisible(); // list stays open, just refreshed
   await expect(page.locator('.sprint-history-row')).toHaveCount(1); // only Sprint C left
@@ -593,6 +595,7 @@ test('past sprints can be reopened (blocked when one is already active) or delet
   await page.locator('.sprint-history-row', { hasText: 'Sprint C' }).click();
   await page.locator('.sprint-detail-delete-menu > button').click();
   await page.locator('.sprint-detail-delete-dropdown button', { hasText: 'Delete (Remove Tasks)' }).click();
+  await acceptAppConfirm(page);
   await expect(page.locator('#sprint-history-modal-body .sprint-history-detail-empty')).toHaveText('No past sprints.');
 
   const afterWipeDelete = await page.evaluate(() => {
@@ -654,16 +657,15 @@ test('starting or editing a sprint with an implausibly long date range warns bef
   await page.locator('#sprint-end-input').fill('2026-06-01'); // 151 days
 
   // Dismissing the warning leaves the modal open and nothing gets created.
-  let dialogMessage = '';
-  page.once('dialog', (d) => { dialogMessage = d.message(); d.dismiss(); });
   await page.locator('#sprint-modal-submit').click();
-  expect(dialogMessage).toContain('151 days');
+  await expect(page.locator('#app-confirm-modal-text')).toContainText('151 days');
+  await dismissAppConfirm(page);
   await expect(page.locator('#sprint-modal-backdrop')).toBeVisible();
   await expect(page.locator('#project-toolbar button', { hasText: 'Start Sprint' })).toBeVisible();
 
   // Accepting it proceeds as normal.
-  page.once('dialog', (d) => d.accept());
   await page.locator('#sprint-modal-submit').click();
+  await acceptAppConfirm(page);
   await expect(page.locator('#sprint-modal-backdrop')).toBeHidden();
   await expect(page.locator('.sprint-info-name')).toHaveText('Way Too Long Sprint');
 
@@ -671,8 +673,8 @@ test('starting or editing a sprint with an implausibly long date range warns bef
   // on initial creation.
   await page.locator('#project-toolbar button', { hasText: 'Edit' }).click();
   await page.locator('#sprint-end-input').fill('2027-01-01');
-  page.once('dialog', (d) => d.dismiss());
   await page.locator('#sprint-modal-submit').click();
+  await dismissAppConfirm(page);
   await expect(page.locator('#sprint-modal-backdrop')).toBeVisible();
   await expect(page.locator('.sprint-info-name')).toHaveText('Way Too Long Sprint'); // unchanged so far
   await page.locator('#sprint-modal-cancel').click();
@@ -770,7 +772,6 @@ test('Scrum mode widens the board (and stays aligned with the toolbar), Kanban k
 });
 
 test('burndown total grows when scope is added to an already-started sprint (issue #46)', async ({ page }) => {
-  page.on('dialog', (d) => d.accept());
   await page.goto(APP_URL);
   await page.evaluate(() => {
     const backdrop = document.getElementById('save-warning-backdrop');

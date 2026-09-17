@@ -349,6 +349,34 @@
     gap: 8px;
   }
 
+  /* Always the topmost layer, since these can be triggered from inside any
+     other modal (e.g. the sprint detail modal, z-index 1010) -- matching how
+     a native confirm()/alert() always sits above everything else. */
+  #app-alert-modal-backdrop, #app-confirm-modal-backdrop {
+    z-index: 1100;
+  }
+
+  .app-dialog-modal {
+    max-width: 380px;
+  }
+
+  .app-dialog-message {
+    color: var(--ink-soft);
+    font-size: 14px;
+    line-height: 1.5;
+    white-space: pre-line;
+    margin: 0 0 20px;
+  }
+
+  .app-dialog-modal .save-status-btn.danger-btn {
+    border-color: var(--danger);
+    color: var(--danger);
+  }
+
+  .app-dialog-modal .save-status-btn.danger-btn:hover {
+    background: var(--danger-wash);
+  }
+
   .sprint-info {
     display: flex;
     align-items: baseline;
