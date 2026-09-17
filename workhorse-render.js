@@ -258,11 +258,11 @@
     });
   }
 
-  function deleteProject(id) {
+  async function deleteProject(id) {
     if (state.projects.length <= 1) return;
     const proj = state.projects.find(p => p.id === id);
     if (!proj) return;
-    const confirmed = confirm('Delete project "' + proj.name + '" and all its tasks? You can undo this with Ctrl+Z.');
+    const confirmed = await showAppConfirm('Delete project "' + proj.name + '" and all its tasks? You can undo this with Ctrl+Z.', { danger: true, confirmLabel: 'Delete' });
     if (!confirmed) return;
     pushHistory();
     const idx = state.projects.findIndex(p => p.id === id);
@@ -1246,7 +1246,7 @@
 
   function submitTaskModal() {
     const title = document.getElementById('task-modal-title-input').value.trim();
-    if (!title) { alert('Give the task a title first.'); return; }
+    if (!title) { showAppAlert('Give the task a title first.'); return; }
     const description = document.getElementById('task-modal-description-input').value.trim();
     const text = description ? title + '\n' + description : title;
     const deadline = document.getElementById('task-modal-deadline-input').value || null;
@@ -1266,7 +1266,7 @@
         }
       }
     } else if (!createTask(taskModalCol, text, { deadline: deadline, points: points })) {
-      alert('Start a sprint before adding tasks here.');
+      showAppAlert('Start a sprint before adding tasks here.');
       return;
     }
     closeTaskModal();

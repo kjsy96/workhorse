@@ -67,8 +67,11 @@ test('the "more detail" add-task modal creates a task with a title, description,
 
   // Submitting with no title is rejected rather than creating a blank task.
   await page.locator('.add-task-btn[data-col="todo"]').click();
-  page.once('dialog', (d) => d.dismiss());
   await page.locator('#task-modal-submit').click();
+  await expect(page.locator('#app-alert-modal-backdrop')).toBeVisible();
+  await expect(page.locator('#app-alert-modal-text')).toHaveText('Give the task a title first.');
+  await page.locator('#app-alert-modal-ok').click();
+  await expect(page.locator('#app-alert-modal-backdrop')).toBeHidden();
   await expect(page.locator('#task-modal-backdrop')).toBeVisible(); // still open, nothing created
   await expect(page.locator('[data-count="todo"]')).toHaveText('1');
 

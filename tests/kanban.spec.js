@@ -1,6 +1,6 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
-const { APP_URL, addTask, openCardMenu } = require('./helpers');
+const { APP_URL, addTask, openCardMenu, acceptAppConfirm, dismissAppConfirm } = require('./helpers');
 
 test('adding a task updates the column', async ({ page }) => {
   const errors = [];
@@ -157,4 +157,34 @@ test('pre-issue-#32 Kanban Done items with no completedAt get backfilled on load
   await expect(card.locator('.card-completed')).toBeVisible();
 
   expect(errors, 'no console/page errors migrating a legacy Kanban Done item').toEqual([]);
+});
+
+test('deleting a project asks via a themed confirm modal (issue #63); canceling keeps it, confirming removes it', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
+
+  await page.goto(APP_URL);
+  await page.evaluate(() => {
+    const backdrop = document.getElementById('save-warning-backdrop');
+    if (backdrop) backdrop.style.display = 'none';
+  });
+
+  await page.locator('.project-tab-add').click();
+  const newTab = page.locator('.project-tab', { hasText: 'New Project' });
+  await expect(newTab).toBeVisible();
+  await page.keyboard.press('Escape'); // exit the new project's auto-opened rename mode first
+
+  // Canceling the themed confirm leaves the project untouched.
+  await newTab.locator('.project-tab-close').click();
+  await expect(page.locator('#app-confirm-modal-text')).toContainText('New Project');
+  await dismissAppConfirm(page);
+  await expect(newTab).toBeVisible();
+
+  // Confirming removes it.
+  await newTab.locator('.project-tab-close').click();
+  await acceptAppConfirm(page);
+  await expect(page.locator('.project-tab', { hasText: 'New Project' })).toHaveCount(0);
+
+  expect(errors, 'no console/page errors around the themed delete-project confirm').toEqual([]);
 });
