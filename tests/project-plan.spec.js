@@ -15,7 +15,7 @@ test('project plan path can be set, opens as a file:// link, edited, and cleared
   await addBtn.click();
 
   await expect(page.locator('#plan-modal-backdrop')).toBeVisible();
-  await page.locator('#plan-path-input').fill('C:\\Users\\Kevin\\Documents\\Project X\\Plan.docx');
+  await page.locator('#plan-path-input').fill('C:\\Users\\TestUser\\Documents\\Project X\\Plan.docx');
   await page.locator('#plan-modal-submit').click();
   await expect(page.locator('#plan-modal-backdrop')).toBeHidden();
 
@@ -23,7 +23,7 @@ test('project plan path can be set, opens as a file:// link, edited, and cleared
   await expect(link).toBeVisible();
   await expect(link).toContainText('Plan.docx');
   const href = await link.getAttribute('href');
-  expect(href).toBe('file:///C:/Users/Kevin/Documents/Project%20X/Plan.docx');
+  expect(href).toBe('file:///C:/Users/TestUser/Documents/Project%20X/Plan.docx');
   await expect(link).toHaveAttribute('target', '_blank');
 
   // Clicking opens a new tab (target="_blank") rather than navigating the
@@ -43,8 +43,8 @@ test('project plan path can be set, opens as a file:// link, edited, and cleared
 
   // Editing via the pencil button pre-fills the existing path.
   await page.locator('.project-plan-edit').click();
-  await expect(page.locator('#plan-path-input')).toHaveValue('C:\\Users\\Kevin\\Documents\\Project X\\Plan.docx');
-  await page.locator('#plan-path-input').fill('C:\\Users\\Kevin\\Documents\\Project X\\Scope.pdf');
+  await expect(page.locator('#plan-path-input')).toHaveValue('C:\\Users\\TestUser\\Documents\\Project X\\Plan.docx');
+  await page.locator('#plan-path-input').fill('C:\\Users\\TestUser\\Documents\\Project X\\Scope.pdf');
   await page.locator('#plan-modal-submit').click();
   await expect(page.locator('.project-plan-open')).toContainText('Scope.pdf');
 
@@ -97,7 +97,7 @@ test('a plan path pasted with surrounding quotes (Explorer "Copy as path") still
   });
 
   await page.locator('.project-plan .save-status-btn', { hasText: 'Project Plan' }).click();
-  await page.locator('#plan-path-input').fill('"C:\\Users\\Kevin\\Documents\\Project X\\Plan.docx"');
+  await page.locator('#plan-path-input').fill('"C:\\Users\\TestUser\\Documents\\Project X\\Plan.docx"');
   await page.locator('#plan-modal-submit').click();
 
   const link = page.locator('.project-plan-open');
@@ -106,9 +106,9 @@ test('a plan path pasted with surrounding quotes (Explorer "Copy as path") still
   await expect(link).toContainText('Plan.docx');
   await expect(link).not.toContainText('"');
   const href = await link.getAttribute('href');
-  expect(href).toBe('file:///C:/Users/Kevin/Documents/Project%20X/Plan.docx');
+  expect(href).toBe('file:///C:/Users/TestUser/Documents/Project%20X/Plan.docx');
 
   // Reopening the edit modal should show the clean, unquoted path too.
   await page.locator('.project-plan-edit').click();
-  await expect(page.locator('#plan-path-input')).toHaveValue('C:\\Users\\Kevin\\Documents\\Project X\\Plan.docx');
+  await expect(page.locator('#plan-path-input')).toHaveValue('C:\\Users\\TestUser\\Documents\\Project X\\Plan.docx');
 });
