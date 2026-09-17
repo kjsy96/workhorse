@@ -1,6 +1,6 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
-const { APP_URL, addTask, openCardMenu, acceptAppConfirm, dismissAppConfirm } = require('./helpers');
+const { APP_URL, addTask, openCardMenu, acceptAppConfirm, dismissAppConfirm, exitAutoRenameMode } = require('./helpers');
 
 test('adding a task updates the column', async ({ page }) => {
   const errors = [];
@@ -173,7 +173,7 @@ test('deleting a project asks via a themed confirm modal (issue #63); canceling 
   await page.locator('.project-tab-add').click();
   const newTab = page.locator('.project-tab', { hasText: 'New Project' });
   await expect(newTab).toBeVisible();
-  await page.keyboard.press('Escape'); // exit the new project's auto-opened rename mode first
+  await exitAutoRenameMode(page, newTab);
 
   // Canceling the themed confirm leaves the project untouched.
   await newTab.locator('.project-tab-close').click();

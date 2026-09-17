@@ -3,6 +3,7 @@
   // this app has no external dependencies beyond the two Google Fonts.
   const COPY_ICON_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
   const CHECK_ICON_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+  const ARCHIVE_ICON_SVG = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="5" rx="1"></rect><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"></path><path d="M10 12h4"></path></svg>';
 
   // Writes `text` to the clipboard and briefly swaps `btn`'s icon to a
   // checkmark as confirmation. Tries the modern Clipboard API first (file://
@@ -117,7 +118,13 @@
     const tabsEl = document.getElementById('project-tabs');
     tabsEl.innerHTML = '';
 
-    state.projects.forEach(p => {
+    // Archived projects (issue #64) stay in state.projects -- and count
+    // toward deleteProject's own "don't delete your last project" guard
+    // below -- but never appear as a tab; they're only reachable through
+    // the Archived Projects modal opened from archiveBtn further down.
+    const visibleProjects = state.projects.filter(p => !p.archived);
+
+    visibleProjects.forEach(p => {
       const tab = document.createElement('div');
       tab.className = 'project-tab' + (p.id === state.activeProjectId ? ' active' : '');
       tab.dataset.id = p.id;
@@ -128,6 +135,20 @@
       nameSpan.textContent = p.name;
       nameSpan.contentEditable = 'false';
       tab.appendChild(nameSpan);
+
+      // Archiving needs somewhere else for the tab bar to land, same reason
+      // deleteProject refuses to drop below one project total.
+      if (visibleProjects.length > 1) {
+        const archiveBtn = document.createElement('button');
+        archiveBtn.className = 'project-tab-archive';
+        archiveBtn.innerHTML = ARCHIVE_ICON_SVG;
+        archiveBtn.title = 'Archive project';
+        archiveBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          archiveProject(p.id);
+        });
+        tab.appendChild(archiveBtn);
+      }
 
       if (state.projects.length > 1) {
         const closeBtn = document.createElement('button');
@@ -212,6 +233,15 @@
     addBtn.title = 'New project';
     addBtn.addEventListener('click', addProject);
     tabsEl.appendChild(addBtn);
+
+    const archivedCount = state.projects.length - visibleProjects.length;
+    if (archivedCount > 0) {
+      const archivedBtn = document.createElement('button');
+      archivedBtn.className = 'save-status-btn project-tabs-archived-btn';
+      archivedBtn.textContent = 'Archived (' + archivedCount + ')';
+      archivedBtn.addEventListener('click', openArchivedProjectsModal);
+      tabsEl.appendChild(archivedBtn);
+    }
   }
 
   function startRenameProject(project, nameSpan) {
@@ -273,6 +303,99 @@
     }
     save(state);
     render();
+  }
+
+  // Archiving hides a project from the tab bar without touching its data --
+  // distinct from deleteProject, which is permanent. Reopen anytime from the
+  // Archived Projects modal below.
+  async function archiveProject(id) {
+    const proj = state.projects.find(p => p.id === id);
+    if (!proj || proj.archived) return;
+    if (state.projects.filter(p => !p.archived).length <= 1) return;
+    const confirmed = await showAppConfirm('Archive project "' + proj.name + '"? It moves out of the tab bar but keeps all its tasks -- reopen it anytime from Archived Projects. You can undo this with Ctrl+Z.', { confirmLabel: 'Archive' });
+    if (!confirmed) return;
+    pushHistory();
+    proj.archived = true;
+    if (state.activeProjectId === id) {
+      const next = state.projects.find(p => !p.archived);
+      state.activeProjectId = next.id;
+    }
+    save(state);
+    render();
+  }
+
+  // Switches straight back to the reopened project, same as clicking any
+  // other tab would -- reopening implies wanting to look at it again.
+  function unarchiveProject(id) {
+    const proj = state.projects.find(p => p.id === id);
+    if (!proj) return;
+    pushHistory();
+    proj.archived = false;
+    state.activeProjectId = id;
+    save(state);
+    closeArchivedProjectsModal();
+    render();
+  }
+
+  function renderArchivedProjectsModalBody() {
+    const body = document.getElementById('archived-projects-modal-body');
+    body.innerHTML = '';
+    const archived = state.projects.filter(p => p.archived);
+    if (!archived.length) {
+      const empty = document.createElement('div');
+      empty.className = 'sprint-history-detail-empty';
+      empty.textContent = 'No archived projects.';
+      body.appendChild(empty);
+      return;
+    }
+    archived.forEach(p => {
+      const row = document.createElement('div');
+      row.className = 'archived-project-row';
+
+      const info = document.createElement('div');
+      info.className = 'archived-project-info';
+      const nameEl = document.createElement('div');
+      nameEl.className = 'archived-project-name';
+      nameEl.textContent = p.name;
+      info.appendChild(nameEl);
+      const taskCount = COLS.reduce((sum, col) => sum + (p[col] ? p[col].length : 0), 0) +
+        (p.activeSprint ? COLS.reduce((sum, col) => sum + (p.activeSprint[col] ? p.activeSprint[col].length : 0), 0) : 0);
+      const metaEl = document.createElement('div');
+      metaEl.className = 'archived-project-meta';
+      metaEl.textContent = taskCount + (taskCount === 1 ? ' task' : ' tasks');
+      info.appendChild(metaEl);
+      row.appendChild(info);
+
+      const actions = document.createElement('div');
+      actions.className = 'archived-project-actions';
+
+      const reopenBtn = document.createElement('button');
+      reopenBtn.className = 'save-status-btn';
+      reopenBtn.textContent = 'Reopen';
+      reopenBtn.addEventListener('click', () => unarchiveProject(p.id));
+      actions.appendChild(reopenBtn);
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'save-status-btn';
+      deleteBtn.textContent = 'Delete';
+      deleteBtn.addEventListener('click', async () => {
+        await deleteProject(p.id);
+        renderArchivedProjectsModalBody();
+      });
+      actions.appendChild(deleteBtn);
+
+      row.appendChild(actions);
+      body.appendChild(row);
+    });
+  }
+
+  function openArchivedProjectsModal() {
+    renderArchivedProjectsModalBody();
+    document.getElementById('archived-projects-modal-backdrop').style.display = 'flex';
+  }
+
+  function closeArchivedProjectsModal() {
+    document.getElementById('archived-projects-modal-backdrop').style.display = 'none';
   }
 
   // Builds one card's full DOM element -- list-view text/bullets/checkboxes,
@@ -598,7 +721,11 @@
     });
     dropdown.appendChild(sendBtn);
 
-    if (state.projects.length > 1) {
+    // Archived projects are excluded as move targets -- moving a task
+    // somewhere currently hidden from the tab bar would make it silently
+    // vanish from view, which isn't what "Move to" implies.
+    const moveTargets = state.projects.filter(p => !p.archived && p.id !== state.activeProjectId);
+    if (moveTargets.length) {
       const divider1 = document.createElement('div');
       divider1.className = 'card-menu-divider';
       dropdown.appendChild(divider1);
@@ -608,8 +735,7 @@
       moveLabel.textContent = 'Move to';
       dropdown.appendChild(moveLabel);
 
-      state.projects.forEach(p => {
-        if (p.id === state.activeProjectId) return;
+      moveTargets.forEach(p => {
         const moveBtn = document.createElement('button');
         moveBtn.className = 'card-menu-item';
         moveBtn.textContent = p.name;
@@ -1294,6 +1420,16 @@
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && document.getElementById('task-modal-backdrop').style.display === 'flex') {
       closeTaskModal();
+    }
+  });
+
+  document.getElementById('archived-projects-modal-close').addEventListener('click', closeArchivedProjectsModal);
+  document.getElementById('archived-projects-modal-backdrop').addEventListener('click', (e) => {
+    if (e.target.id === 'archived-projects-modal-backdrop') closeArchivedProjectsModal();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && document.getElementById('archived-projects-modal-backdrop').style.display === 'flex') {
+      closeArchivedProjectsModal();
     }
   });
 
