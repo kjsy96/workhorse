@@ -4,7 +4,7 @@ A zero-dependency task and project management tool — drag-and-drop Kanban boar
 
 This started as a hands-on project for building fluency with Claude: the first several versions were built conversationally in the Claude.ai chat interface, then the project moved to Claude Code once it needed real version control, a proper git workflow, and more structured, file-aware development. The commit history and `CLAUDE.md` in this repo reflect that transition — `CLAUDE.md` is the handoff document written for Claude Code itself, capturing the bugs, architecture decisions, and conventions from the chat-based sessions so that context wasn't lost when switching tools. It was called "Kanban Board" through v1.4 before being renamed to reflect the broader Scrum support.
 
-Open `workhorse.html` in Chrome or Edge — no install, no build step, no server (it's split across a handful of plain files — `workhorse.css`, `workhorse-core.js`, `workhorse-render.js`, `workhorse-scrum.js` — but still opens by double-clicking, no bundler involved). Load `workhorse-example-data.json` from the app's save-file menu to try it out with sample data.
+Open `workhorse.html` in Chrome or Edge — no install, no build step, no server (it's split across a handful of plain files — `workhorse.css`, `workhorse-core.js`, `workhorse-render.js`, `workhorse-project-plan.js`, `workhorse-scrum.js` — but still opens by double-clicking, no bundler involved). Load `workhorse-example-data.json` from the app's save-file menu to try it out with sample data.
 
 ## Features
 
@@ -14,6 +14,7 @@ Open `workhorse.html` in Chrome or Edge — no install, no build step, no server
 - **Deadlines** — optional due dates per task, with a badge that turns red when overdue
 - **Inline bullets and checkboxes** — lightweight markdown-style syntax (`* item`, `[] item`, `[x] item`) parsed and rendered live, no separate "formatting mode" required
 - **A real add/edit-task modal** — title, an optional multi-line description (hidden behind a "Show details" toggle unless you open it), deadline, and story points, all set up front or changed later from the same form — no separate in-card editing mode to learn
+- **Copy a task's text in one click** — a small button on every card copies its raw text (title, description, markdown-lite bullets/checkboxes included) to the clipboard, for pasting into another conversation or document
 - **Project Plan & Scope** — point a project at the local file path of its plan/scope document (a Word doc, markdown file, PDF, whatever) and open it in one click from the same toolbar you're already working in
 - **Undo/redo** — full history stack with keyboard shortcuts, that correctly ignores native text-field undo so you don't fight the browser while typing
 - **Real autosave to disk** — connects to a `.json` file on disk via the File System Access API and keeps it in sync on every change, not just `localStorage`
@@ -23,6 +24,7 @@ Open `workhorse.html` in Chrome or Edge — no install, no build step, no server
 - **Drag a card onto a project tab** to move it, alongside the existing per-card "Move to" menu action
 - **Mobile/touch support** — long-press a card to pick it up, drag to reorder, switch columns, or drop it onto a project tab, with auto-scroll near the screen edges
 - **Save-file warning** — a persistent on-screen prompt if no save file is connected, so you don't lose work by assuming it's synced to disk when it's only in the browser
+- **Themed confirm/alert dialogs** — every delete/complete confirmation and validation message uses an in-app modal matching the rest of the design, not the browser's native gray dialog
 
 ## Notable bugs I found and fixed
 
@@ -41,6 +43,10 @@ The task card's ⋮ options menu would sometimes render visually behind a neighb
 ### The same menu, clipped at the screen edge — and a CSS gotcha hiding under the fix
 
 Later, that same dropdown started getting clipped for cards near the bottom of the board, since it was still positioned relative to its card with no awareness of the viewport. The obvious fix — `position: fixed`, computed in JS to stay on-screen — measurably computed the right coordinates and then rendered in the wrong place anyway, but only while the card was hovered. The cause: that same hover `transform` from the bug above makes its element a *containing block* for any `position: fixed` descendant, so the menu was being positioned relative to the transformed card instead of the viewport. The real fix moved the dropdown out of the card's DOM subtree entirely (appended to `<body>`, tracked by its own `.open` class), sidestepping the containing-block rule altogether rather than fighting it.
+
+### A confirmation dialog trapped underneath the modal that opened it
+
+Replacing the browser's native `confirm()`/`alert()` with themed in-app modals surfaced a variant of the stacking bug above: some flows open a confirmation from inside an already-open modal (deleting an archived sprint from its own history detail view, for instance), and that detail modal deliberately overrides its `z-index` higher than the base modal layer so it stays above the list underneath it. The new confirmation modal shared that same base `z-index`, so it rendered *behind* the modal it was opened from — visible, but unclickable. Fixed by giving the confirm/alert modals their own higher `z-index`, so they're always the topmost layer regardless of what they were opened from. A related timing bug turned up alongside it: each modal's Escape-to-cancel listener was a normal bubble-phase listener, so an older listener from the modal underneath would fire on the same keypress first and close the wrong thing. Fixed by registering the new modals' key handling in the capture phase and stopping propagation, so they always intercept Escape/Enter first.
 
 ## Browser support
 
