@@ -1,4 +1,4 @@
-  const APP_VERSION = 'v1.8';
+  const APP_VERSION = 'v1.9';
   const STORAGE_KEY = 'kanban-personal-board-v1';
   const THEME_STORAGE_KEY = 'kanban-theme-v1';
   const COLS = ['backlog', 'todo', 'doing', 'review', 'done'];
