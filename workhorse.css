@@ -581,6 +581,37 @@
     font-style: italic;
   }
 
+  .archived-project-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .archived-project-row:last-child {
+    border-bottom: none;
+  }
+
+  .archived-project-name {
+    font-size: 13px;
+    color: var(--ink);
+  }
+
+  .archived-project-meta {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-soft);
+    margin-top: 2px;
+  }
+
+  .archived-project-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
   .burndown-container:empty {
     display: none;
   }
@@ -791,6 +822,25 @@
   }
 
   .project-tab-close:hover { opacity: 1; }
+
+  .project-tab-archive {
+    background: none;
+    border: none;
+    color: inherit;
+    opacity: 0.5;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 2px;
+    display: flex;
+    align-items: center;
+    transition: opacity .15s ease;
+  }
+
+  .project-tab-archive:hover { opacity: 1; }
+
+  .project-tabs-archived-btn {
+    color: var(--ink-soft);
+  }
 
   .project-tab-add {
     width: 30px;

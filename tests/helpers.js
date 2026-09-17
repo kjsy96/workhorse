@@ -47,4 +47,18 @@ async function dismissAppAlert(page) {
   await expect(page.locator('#app-alert-modal-backdrop')).toBeHidden();
 }
 
-module.exports = { APP_URL, addTask, openCardMenu, acceptAppConfirm, dismissAppConfirm, dismissAppAlert };
+// addProject() arms rename mode on the new tab's name via requestAnimationFrame,
+// *after* the tab itself is already visible -- under load, pressing Escape
+// before that RAF callback actually runs misses rename mode's own Escape
+// listener (which hasn't been attached yet), and a later click can then
+// collide with rename mode's blur-triggered render() mid-click instead
+// (render() replaces every .project-tab element, including the one a click
+// was just dispatched to). Wait for contenteditable to actually flip before
+// backing out of it.
+async function exitAutoRenameMode(page, tab) {
+  await expect(tab.locator('.project-tab-name')).toHaveAttribute('contenteditable', 'true');
+  await page.keyboard.press('Escape');
+  await expect(tab.locator('.project-tab-name')).toHaveAttribute('contenteditable', 'false');
+}
+
+module.exports = { APP_URL, addTask, openCardMenu, acceptAppConfirm, dismissAppConfirm, dismissAppAlert, exitAutoRenameMode };

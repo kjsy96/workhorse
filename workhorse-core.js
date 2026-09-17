@@ -27,7 +27,7 @@
       id: uid(), name: name,
       todo: [], doing: [], done: [],
       backlog: [], mode: 'kanban', activeSprint: null, sprints: [],
-      planPath: null
+      planPath: null, archived: false
     };
   }
 
@@ -61,6 +61,7 @@
       if (!Array.isArray(p.sprints)) p.sprints = [];
       if (p.activeSprint === undefined) p.activeSprint = null;
       if (p.planPath === undefined) p.planPath = null;
+      if (p.archived === undefined) p.archived = false;
 
       // Pre-separation (v1.4) shape: todo/doing/review/done were shared
       // between Kanban and, in scrum mode, the active sprint's own board.
